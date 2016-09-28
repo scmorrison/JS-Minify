@@ -33,16 +33,20 @@ sub is-postfix($x) {
 
 # -----------------------------------------------------------------------------
 
-sub get($s) {
-  if ($s<inputType> eq 'file') {
-    return getc($s<input>);
-  } elsif ($s<inputType> eq 'string') {
-    if ($s<inputPos> < $s<input>.chars) {
-      return substr($s<input>, $s<inputPos>++, 1);
-    } else { 
-      return;
+sub get($s) { 
+  if ($s<input_type> eq 'file') {
+    my $char = getc($s<input>);
+    $s<last_read_char> = $char;
+    return $char if $char;
+  } elsif ($s<input_type> eq 'string') {
+    if ($s<input_pos> < $s<input>.chars) {
+      return $s<last_read_char> = substr($s<input>, $s<input_pos>++, 1);
     }
-  } else {
+    else { # Simulate getc() when off the end of the input string.
+      return '';
+    }
+  }
+  else {
    die "no input";
   }
 }
@@ -132,7 +136,7 @@ sub collapse-whitespace($s) {
   while ($s<a> && is-whitespace($s<a>) &&
          $s<b> && is-whitespace($s<b>)) {
     if (is-endspace($s<a>) || is-endspace($s<b>)) {
-      $s<a> = '\n';
+      $s<a> = "\n";
     }
     action4($s); # delete b
   }
@@ -285,10 +289,10 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
 
   # determine if the the input is a string or a file handle.
   if ($input && $input.WHAT ~~ Str) {
-    %s<inputPos>  = 0;
-    %s<inputType> = 'string';
+    %s<input_pos>  = 0;
+    %s<input_type> = 'string';
   } else {
-    %s<inputType> = 'file';
+    %s<input_type> = 'file';
   }
 
   # Determine if the output is to a string or a file.
@@ -319,6 +323,10 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
     
     # Each branch handles trailing whitespace and ensures $s<a> is on non-whitespace or '' when branch finishes
     process-char(%s);
+  }
+  
+  if ( %s<last_read_char> and %s<last_read_char> ~~ /\n/ ) {
+    put(%s, "\n");
   }
   
   if (!%s<outfile>) {
