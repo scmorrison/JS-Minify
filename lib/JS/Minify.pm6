@@ -7,16 +7,12 @@ sub is-alphanum($x) {
   return ($x ~~ /<[ \w \$ \\ ]>/).Bool || ord($x) > 126;
 }
 
-sub is-space($x) {
-  return ($x ~~ ' '|"\t");
-}
-
 sub is-endspace($x) {
   return ($x ~~ "\n"|"\r"|"\f");
 }
 
 sub is-whitespace($x) {
-  return (is-space($x) || is-endspace($x));
+  return ($x ~~ ' '|"\t" || is-endspace($x));
 }
 
 # New line characters before or after these characters can be removed.
