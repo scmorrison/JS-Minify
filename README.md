@@ -1,8 +1,6 @@
-# Name
+# JS::Minify [![Build Status](https://travis-ci.org/scmorrison/JS-Minify.svg?branch=master)](https://travis-ci.org/scmorrison/JS-Minify)
 
-JS::Minify - Perl 6 JavaScript minifier [![Build Status](https://travis-ci.org/scmorrison/JS-Minify.svg?branch=master)](https://travis-ci.org/scmorrison/JS-Minify)
-
-This module is a [Perl 6](https://perl6.org) port of [JavaScript::Minifier](https://metacpan.org/pod/JavaScript::Minifier).
+JavaScript minifier module for [Perl 6](https://perl6.org). This is a port of the [Perl](https://perl.org) [JavaScript::Minifier](https://metacpan.org/pod/JavaScript::Minifier) module.
 
 # Synopsis
 
