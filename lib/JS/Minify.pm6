@@ -4,7 +4,7 @@ unit module Minify::JS;
 
 # return true if the character is allowed in identifier.
 sub is-alphanum($x) {
-  return ($x ~~ /<[ \w \$ \\ ]>/ || ord($x) > 126);
+  return ($x ~~ /<[ \w \$ \\ ]>/).Bool || ord($x) > 126;
 }
 
 sub is-space($x) {
