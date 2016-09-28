@@ -29,12 +29,11 @@ To include a copyright comment at the top of the minified code.
 js-minify(input => 'var x = 2;', copyright => 'BSD License');
 ```
 
-**note:** _Not yet implemented_
-
 To treat ';;;' as '//' so that debugging code can be removed. This is a common JavaScript convention for minification.
 
 ```perl6
-js-minify(input => 'var x = 2;', strip_debug => 1);
+js-minify(input => "var x = 2;\n;;;alert('hi');\nvar x = 2;", stripDebug => 1)
+# output: 'var x=2;var x=2;'
 ```
 
 The `input` parameter is mandatory. The `output`, `copyright`, and `strip_debug` parameters are optional and can be used in any combination.

@@ -270,12 +270,12 @@ multi sub process-char($s where {$s<a> eq ']' || $s<a> eq '}' || $s<a> eq ')'}) 
   preserve-endspace($s);
 }
 
-multi sub process-char(%s where {%s<strip_debug> == 1 && %s<a> eq ';' &&
-                                 %s<b> && %s<b> eq ';' && %s<c> && %s<c> eq ';'}) {
-  action3(%s); # delete one of the semi-colons
-  %s<a> = '/'; # replace the other two semi-colons
-  %s<b> = '/'; # so the remainder of line is removed
-}
+#multi sub process-char(%s where {%s<strip_debug> == 1 && %s<a> eq ';' &&
+#                                 %s<b> && %s<b> eq ';' && %s<c> && %s<c> eq ';'}) {
+#  action3(%s); # delete one of the semi-colons
+#  %s<a> = '/'; # replace the other two semi-colons
+#  %s<b> = '/'; # so the remainder of line is removed
+#}
 
 multi sub process-char($s) {
   action1($s);
@@ -290,8 +290,9 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
 
   # Immediately turn hash into a hash reference so that notation is the same in this function
   # as others. Easier refactoring.
-  my %s = input       => $input,       # hash reference for "state". This module
-          strip_debug => $strip_debug; # is functional programming and the state is passed between functions.
+
+  # hash reference for "state". This module
+  my %s = input => ($strip_debug == 1 ?? $input.subst(/ ';;;' .+ \n /, '') !! $input);
 
   # determine if the the input is a string or a file handle.
   if ($input && $input.WHAT ~~ Str) {
