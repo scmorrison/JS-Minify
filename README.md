@@ -58,19 +58,19 @@ Exported by default: `js-minifiy()`
 # Repository
 
 You can obtain the latest source code and submit bug reports on the github repository for this module:
-[https://github.com/scmorrison/JS-Minify.git](https://github.com/scmorrison/JS-Minify.git)
+[https://github.com/scmorrison/JS-Minify](https://github.com/scmorrison/JS-Minify).
 
 # Author
 
-Sam Morrison, @scmorrison
+* Sam Morrison, [scmorrison](https://github.com/scmorrison/)
 
 # Original Authors
 
-Zoffix Znet, <zoffix@cpan.org> [https://metacpan.org/author/ZOFFIX](https://metacpan.org/author/ZOFFIX)
-Peter Michaux, <petermichaux@gmail.com>
-Eric Herrera, <herrera@10east.com>
-Miller 'tmhall' Hall
-Вячеслав 'vti' Тихановский
+* Zoffix Znet, <zoffix@cpan.org> [https://metacpan.org/author/ZOFFIX](https://metacpan.org/author/ZOFFIX)
+* Peter Michaux, <petermichaux@gmail.com>
+* Eric Herrera, <herrera@10east.com>
+* Miller 'tmhall' Hall
+* Вячеслав 'vti' Тихановский
 
 # License Information
 
