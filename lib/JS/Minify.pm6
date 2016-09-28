@@ -53,8 +53,8 @@ sub get($s) {
 
 sub put($s, $x) {
   my $outfile = ($s<outfile>);
-  if (defined($s<outfile>)) {
-    print "$outfile $x";
+  if $s<outfile> {
+    print $outfile, $x;
   }
   else {
     $s<output> ~= $x;
@@ -114,15 +114,15 @@ sub put-literal($s) {
   my $delimiter = $s<a>; # ', " or /
   action1($s);
   repeat {
-    while ($s<a> && $s<a> eq '\\') { # escape character only escapes only the next one character
+    while ($s<a> && $s<a> ~~ '\\') { # escape character only escapes only the next one character
       action1($s);       
       action1($s);       
     }
     action1($s);
-  } until ($s<last> eq $delimiter || !$s<a>);
-  if ($s<last> ne $delimiter) { # ran off end of file before printing the closing delimiter
-    die 'unterminated single quoted string literal, stopped' if $delimiter eq '\'';
-    die 'unterminated double quoted string literal, stopped' if $delimiter eq '"';
+  } until ($s<last> ~~ $delimiter || !$s<a>);
+  if ($s<last> !~~ $delimiter) { # ran off end of file before printing the closing delimiter
+    die 'unterminated single quoted string literal, stopped' if $delimiter ~~ '\'';
+    die 'unterminated double quoted string literal, stopped' if $delimiter ~~ '"';
     die 'unterminated regular expression literal, stopped';
   }
 }
@@ -163,7 +163,7 @@ sub preserve-endspace($s) {
 sub on-whitespace-conditional-comment($s) {
   return ($s<a> && is-whitespace($s<a>) &&
           $s<b> && $s<b> eq '/' &&
-          $s<c> && ($s<c> eq '/' || $s<c> eq '*') &&
+          $s<c> && ($s<c> ~~ / <[ / * ]> /) &&
           $s<d> && $s<d> eq '@');
 }
 
@@ -171,13 +171,13 @@ sub on-whitespace-conditional-comment($s) {
 # process-comments
 #
 
-multi sub process-comments($ccFlag, $s where {$s<b> && $s<b> eq '/'}) {
-  $ccFlag = $s<c> && $s<c> eq '@'; # tests in IE7 show no space allowed between slashes and at symbol
+multi sub process-comments($s where {$s<b> && $s<b> eq '/'}) { # a division, comment, or regexp literal
+  my $cc_flag = $s<c> && $s<c> eq '@'; # tests in IE7 show no space allowed between slashes and at symbol
   repeat {
-    $ccFlag ?? action2($s) !! action3($s);
+    $cc_flag ?? action2($s) !! action3($s);
   } until (!$s<a> || is-endspace($s<a>));
   if ($s<a>) { # $s<a> is a new line
-    if ($ccFlag) {
+    if ($cc_flag) {
       action1($s); # cannot use preserve-endspace($s) here because it might not print the new line
       skip-whitespace($s);
     } elsif ($s<last> && !is-endspace($s<last>) && !is-prefix($s<last>)) {
@@ -188,7 +188,7 @@ multi sub process-comments($ccFlag, $s where {$s<b> && $s<b> eq '/'}) {
   }
 }
 
-multi sub process-comments($s where {$s<b> && $s<b> eq '*'}) {
+multi sub process-comments($s where {$s<b> && $s<b> eq '*'}) { # slash-star comment
   my $cc_flag = $s<c> && $s<c> eq '@'; # test in IE7 shows no space allowed between star and at symbol
   repeat { 
     $cc_flag ?? action2($s) !! action3($s);
@@ -209,7 +209,7 @@ multi sub process-comments($s where {$s<b> && $s<b> eq '*'}) {
         # When entering this block $s<a> is whitespace.
         # The comment represented whitespace that cannot be removed. Therefore replace the now gone comment with a whitespace.
         action1($s);
-      } elsif ($s<last> ne '' && !is-prefix($s<last>)) {
+      } elsif ($s<last> && !is-prefix($s<last>)) {
         preserve-endspace($s);
       } else {
         skip-whitespace($s);
@@ -220,8 +220,9 @@ multi sub process-comments($s where {$s<b> && $s<b> eq '*'}) {
   }
 }
 
-multi sub process-comments($s where {$s<lastnws> && ($s<lastnws> eq ')' || $s<lastnws> eq ']' ||
-                                     $s<lastnws> eq '.' || is-alphanum($s<lastnws>))}) {
+multi sub process-comments($s where {$s<lastnws> && 
+                          ($s<lastnws> ~~ / <[ ) \] \. ]> / ||
+                           is-alphanum($s<lastnws>))}) {  # division
   action1($s);
   collapse-whitespace($s);
   # don't want a division to become a slash-slash comment with following conditional comment
@@ -239,16 +240,16 @@ multi sub process-comments($s) {
 # process-char
 #
 
-multi sub process-char($s where {$s<a> eq '/'}) {
+multi sub process-char($s where {$s<a> eq '/'}) { # a division, comment, or regexp literal
   process-comments($s);
 }
 
-multi sub process-char($s where {$s<a> eq '\'' || $s<a> eq '"' }) {
+multi sub process-char($s where {$s<a> ~~ / <[ ' " ]> /}) { # string literal
   put-literal($s);
   preserve-endspace($s);
 }
 
-multi sub process-char($s where {$s<a> eq '+' || $s<a> eq '-'}) {
+multi sub process-char($s where {$s<a> ~~ / <[+ -]> /}) { # careful with + + and - -
   action1($s);
   collapse-whitespace($s);
   if ($s<a> && is-whitespace($s<a>)) {
@@ -256,7 +257,7 @@ multi sub process-char($s where {$s<a> eq '+' || $s<a> eq '-'}) {
   }
 }
 
-multi sub process-char($s where {is-alphanum($s<a>)}) {
+multi sub process-char($s where {is-alphanum($s<a>)}) { # keyword, identifiers, numbers
   action1($s);
   collapse-whitespace($s);
   if ($s<a> && is-whitespace($s<a>)) {
@@ -265,7 +266,7 @@ multi sub process-char($s where {is-alphanum($s<a>)}) {
   }
 }
 
-multi sub process-char($s where {$s<a> eq ']' || $s<a> eq '}' || $s<a> eq ')'}) {
+multi sub process-char($s where {$s<a> ~~ / <[ \] } ) ]> /}) {
   action1($s);
   preserve-endspace($s);
 }
