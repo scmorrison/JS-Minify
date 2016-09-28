@@ -270,13 +270,6 @@ multi sub process-char($s where {$s<a> eq ']' || $s<a> eq '}' || $s<a> eq ')'}) 
   preserve-endspace($s);
 }
 
-#multi sub process-char(%s where {%s<strip_debug> == 1 && %s<a> eq ';' &&
-#                                 %s<b> && %s<b> eq ';' && %s<c> && %s<c> eq ';'}) {
-#  action3(%s); # delete one of the semi-colons
-#  %s<a> = '/'; # replace the other two semi-colons
-#  %s<b> = '/'; # so the remainder of line is removed
-#}
-
 multi sub process-char($s) {
   action1($s);
   skip-whitespace($s);
