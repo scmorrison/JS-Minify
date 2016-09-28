@@ -327,7 +327,7 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
   }
   
   if ( %s<last_read_char> and %s<last_read_char> ~~ /\n/ ) {
-    put(%s, "\n");
+    put(%s, '\n');
   }
   
   if (!%s<outfile>) {
