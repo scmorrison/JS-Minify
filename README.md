@@ -9,7 +9,7 @@ This module is a [Perl 6](https://perl6.org) port of [JavaScript::Minifier](http
 To minify a JavaScript file and have the output written directly to another file
 
 ```perl6
-use JS::Minifyl
+use JS::Minify;
 
 my $in  = open 'myScript.js' or die;
 my $out = open 'myScript-min.js' or die;

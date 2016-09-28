@@ -8,8 +8,7 @@ sub is-alphanum($x) {
 }
 
 sub is-space($x) {
-  #return ($x eq ' ' || $x eq "\t");
-  return ($x eq ' '|"\t");
+  return ($x ~~ ' '|"\t");
 }
 
 sub is-endspace($x) {
@@ -23,17 +22,17 @@ sub is-whitespace($x) {
 # New line characters before or after these characters can be removed.
 # Not + - / in this list because they require special care.
 sub is-infix($x) {
-  return ($x ~~ / <[, ; : = & % * < > \? \| \n ]> /);
+  return ($x ~~ / <[, ; : = & % * < > \? \| \n ]> /).Bool;
 }
 
 # New line characters after these characters can be removed.
 sub is-prefix($x) {
-  return ($x ~~ / <[ \{ \( \[ ! ]> / || is-infix($x));
+  return ($x ~~ / <[ \{ \( \[ ! ]> /).Bool || is-infix($x);
 }
 
 # New line characters before these characters can removed.
 sub is-postfix($x) {
-  return ($x ~~ / <[ \} \) \] ]> / || is-infix($x));
+  return ($x ~~ / <[ \} \) \] ]> /).Bool || is-infix($x);
 }
 
 # -----------------------------------------------------------------------------
