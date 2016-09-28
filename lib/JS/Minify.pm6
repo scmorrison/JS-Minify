@@ -281,7 +281,7 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
   # as others. Easier refactoring.
 
   # hash reference for "state". This module
-  my %s = input => ($strip_debug == 1 ?? $input.subst(/ ';;;' .+ \n /, '') !! $input);
+  my %s = input => ($strip_debug == 1 ?? $input.subst( /';;;' <-[\n]>+/, '', :g) !! $input);
 
   # determine if the the input is a string or a file handle.
   if ($input && $input.WHAT ~~ Str) {
