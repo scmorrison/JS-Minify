@@ -2,12 +2,12 @@
     "perl" : "6.*",
     "name" : "JS::Minify",
     "version"  : "0.0.1",
-    "description" : "Remove spacing, indentation, newlines, and comments from JS.",
+    "description" : "Perl 6 JavaScript minifier",
     "provides" : {
-      "Uzu" : "lib/JS/Minify.pm6"
+      "JS::Minify" : "lib/JS/Minify.pm6"
     },
-    "author" : "Sam Morrison <sam@linux.com>",
+    "author" : "Sam Morrison <sam@samcm.com>",
     "depends" : [],
     "test-depends" : [ "Test::Output" ],
-    "source-url" : "https://gitlab.com/samcns/minify-js.git"
+    "source-url" : "https://github.com/scmorrison/JS-Minify.git"
 }
