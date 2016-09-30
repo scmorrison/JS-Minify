@@ -57,6 +57,10 @@ Exported by default: `js-minifiy()`
 You can obtain the latest source code and submit bug reports on the github repository for this module:
 [https://github.com/scmorrison/JS-Minify](https://github.com/scmorrison/JS-Minify).
 
+# Gotchas
+
+* *bug*: There module [issue](https://github.com/scmorrison/JS-Minify/issues/1) treats opening '/' on the regex is actually a division, because the previous word "return" ends on an alphanumeric character ( basically, it thinks the regex is the beginning of " n / SOMETHING".
+
 # Author
 
 * Sam Morrison, [scmorrison](https://github.com/scmorrison/)
