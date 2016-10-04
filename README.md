@@ -18,7 +18,7 @@ js-minify(input => $in, outfile => $out);
 To minify a JavaScript string literal. Note that by omitting the outfile parameter a the minified code is returned as a string.
 
 ```perl6
-my minified_javascript = js-minify(input => 'var x = 2;');
+my $minified_javascript = js-minify(input => 'var x = 2;');
 ```
 
 To include a copyright comment at the top of the minified code.
