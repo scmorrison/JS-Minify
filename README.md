@@ -65,7 +65,7 @@ You can obtain the latest source code and submit bug reports on the github repos
 
 * Sam Morrison, [scmorrison](https://github.com/scmorrison/)
 
-# Original Authors
+## JS::Minify is based on the Perl *Javascript::Minifier* module developed by the following:
 
 * Zoffix Znet, <zoffix@cpan.org> [https://metacpan.org/author/ZOFFIX](https://metacpan.org/author/ZOFFIX)
 * Peter Michaux, <petermichaux@gmail.com>
