@@ -15,7 +15,7 @@ my $out = open 'myScript-min.js' or die;
 js-minify(input => $in, outfile => $out);
 ```
 
-To minify a JavaScript string literal. Note that by omitting the outfile parameter a the minified code is returned as a string.
+To minify a JavaScript string literal. Note that by omitting the outfile parameter the minified code is returned as a string.
 
 ```perl6
 my $minified_javascript = js-minify(input => 'var x = 2;');
