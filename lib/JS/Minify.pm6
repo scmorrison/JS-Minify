@@ -27,11 +27,10 @@ sub is-prefix($x) {
 }
 
 # New line characters before these characters can removed.
+
 sub is-postfix($x) {
   return ($x ~~ / <[ \} \) \] ]> /).Bool || is-infix($x);
 }
-
-# -----------------------------------------------------------------------------
 
 sub get($s) { 
   if ($s<input_type> eq 'file') {
@@ -55,13 +54,10 @@ sub put($s, $x) {
   my $outfile = ($s<outfile>);
   if $s<outfile> {
     print $outfile, $x;
-  }
-  else {
+  } else {
     $s<output> ~= $x;
   }
 }
-
-# -----------------------------------------------------------------------------
 
 # print a
 # move b to a
@@ -106,8 +102,6 @@ sub action4($s) {
   $s<d> = get($s);
 }
 
-# -----------------------------------------------------------------------------
-
 # put string and regexp literals
 # when this sub is called, $s<a> is on the opening delimiter character
 sub put-literal($s) {
@@ -115,19 +109,18 @@ sub put-literal($s) {
   action1($s);
   repeat {
     while ($s<a> && $s<a> ~~ '\\') { # escape character only escapes only the next one character
-      action1($s);       
-      action1($s);       
+      action1($s);
+      action1($s);
     }
     action1($s);
   } until ($s<last> ~~ $delimiter || !$s<a>);
   if ($s<last> !~~ $delimiter) { # ran off end of file before printing the closing delimiter
+  note $s.perl;
     die 'unterminated single quoted string literal, stopped' if $delimiter ~~ '\'';
     die 'unterminated double quoted string literal, stopped' if $delimiter ~~ '"';
     die 'unterminated regular expression literal, stopped';
   }
 }
-
-# -----------------------------------------------------------------------------
 
 # If $s<a> is a whitespace then collapse all following whitespace.
 # If any of the whitespace is a new line then ensure $s<a> is a new line
@@ -227,6 +220,11 @@ multi sub process-comments($s where {$s<lastnws> &&
   collapse-whitespace($s);
   # don't want a division to become a slash-slash comment with following conditional comment
   on-whitespace-conditional-comment($s) ?? action1($s) !! preserve-endspace($s);
+}
+
+multi sub process-comments($s where {$s<a> ~~ '/' and $s<b> ~~ '.' }) {
+  collapse-whitespace($s);
+  action1($s);
 }
 
 multi sub process-comments($s) {
