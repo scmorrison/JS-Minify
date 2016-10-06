@@ -32,12 +32,11 @@ sub is-postfix($x) {
   return ($x ~~ / <[ \} \) \] ]> /).Bool || is-infix($x);
 }
 
-sub get(%s is copy, $key) { 
+sub get(%s is copy, :$key) { 
   if (%s<input_type> eq 'file') {
     my $char = getc(%s<input>);
     %s<last_read_char> = $char;
     %s{$key} = $char.Bool ?? $char !! '';
-    return %s;
   } elsif (%s<input_type> eq 'string') {
     if (%s<input_pos> < %s<input>.chars) {
       %s<last_read_char> = substr(%s<input>, %s<input_pos>++, 1);
@@ -45,16 +44,16 @@ sub get(%s is copy, $key) {
     } else { # Simulate getc() when off the end of the input string.
       %s{$key} = '';
     }
-    return %s;
   } else {
    die "no input";
   }
+  return %s;
 }
 
 sub put(%s is copy, $x) {
   my $outfile = (%s<outfile>);
   if %s<outfile> {
-    print $outfile, $x;
+    spurt $outfile, $x;
   } else {
     %s<output> ~= $x;
   }
@@ -101,7 +100,8 @@ sub action3(%s is copy) {
 sub action4(%s is copy) {
   %s<b> = %s<c>;
   %s<c> = %s<d>;
-  %s = get(%s, 'd');
+  %s = get(%s, key => 'd');
+  return %s;
 }
 
 # put string and regexp literals
@@ -165,111 +165,21 @@ sub on-whitespace-conditional-comment(%s) {
           %s<d> && %s<d> eq '@');
 }
 
-#
-# process-comments
-#
-
-multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '/'}) { # a division, comment, or regexp literal
-  my $cc_flag = %s<c> && %s<c> eq '@'; # tests in IE7 show no space allowed between slashes and at symbol
-  repeat {
-    %s = $cc_flag ?? action2(%s) !! action3(%s);
-  } until (!%s<a> || is-endspace(%s<a>));
-  if (%s<a>) { # %s<a> is a new line
-    if ($cc_flag) {
-      %s = action1(%s); # cannot use preserve-endspace(%s) here because it might not print the new line
-      %s = skip-whitespace(%s);
-    } elsif (%s<last> && !is-endspace(%s<last>) && !is-prefix(%s<last>)) {
-      %s = preserve-endspace(%s);
-    } else {
-      %s = skip-whitespace(%s);            
-    }
-  }
+# Shift char or preserve endspace toggle
+sub process-conditional-comment(%s) {
+  return on-whitespace-conditional-comment(%s) ?? action1(%s) !! preserve-endspace(%s);
 }
 
-multi sub process-comments(%s where {%s<b> && %s<b> eq '*'}) { # slash-star comment
-  my $cc_flag = %s<c> && %s<c> eq '@'; # test in IE7 shows no space allowed between star and at symbol
-  repeat { 
-    %s = $cc_flag ?? action2(%s) !! action3(%s);
-  } until (!%s<b> || (%s<a> eq '*' && %s<b> eq '/'));
-  if (%s<b>) { # %s<a> is asterisk and %s<b> is foreslash
-    if ($cc_flag) {
-      %s = action2(%s); # the *
-      %s = action2(%s); # the /
-      # inside the conditional comment there may be a missing terminal semi-colon
-      %s = preserve-endspace(%s);
-    } else { # the comment is being removed
-      %s = action3(%s); # the *
-      %s<a> = ' ';  # the /
-      %s = collapse-whitespace(%s);
-      if (%s<last> && %s<b> &&
-        ((is-alphanum(%s<last>) && (is-alphanum(%s<b>)||%s<b> eq '.')) ||
-        (%s<last> eq '+' && %s<b> eq '+') || (%s<last> eq '-' && %s<b> eq '-'))) { # for a situation like 5-/**/-2 or a/**/a
-        # When entering this block %s<a> is whitespace.
-        # The comment represented whitespace that cannot be removed. Therefore replace the now gone comment with a whitespace.
-        %s = action1(%s);
-      } elsif (%s<last> && !is-prefix(%s<last>)) {
-        %s = preserve-endspace(%s);
-      } else {
-        %s = skip-whitespace(%s);
-      }
-    }
-  } else {
-    die 'unterminated comment, stopped';
-  }
-  return %s;
-}
-
-multi sub process-comments(%s is copy where {%s<lastnws> && 
-                          (%s<lastnws> ~~ / <[ ) \] \. ]> / ||
-                           is-alphanum(%s<lastnws>))}) {  # division
-  %s = action1(%s);
-  %s = collapse-whitespace(%s);
-  # don't want a division to become a slash-slash comment with following conditional comment
-  %s = on-whitespace-conditional-comment(%s) ?? action1(%s) !! preserve-endspace(%s);
-  return %s;
-}
-
-multi sub process-comments(%s is copy where {%s<a> ~~ '/' and %s<b> ~~ '.' }) {
-  %s = collapse-whitespace(%s);
-  %s = action1(%s);
-  return %s;
-}
-
-multi sub process-comments(%s is copy) {
-  %s = put-literal(%s);
-  %s = collapse-whitespace(%s);
-  # don't want closing delimiter to become a slash-slash comment with following conditional comment
-  %s = on-whitespace-conditional-comment(%s) ?? action1(%s) !! preserve-endspace(%s);
-  return %s;
-}
-
-#
-# process-char
-#
-
-multi sub process-char(%s is copy where {%s<a> eq '/'}) { # a division, comment, or regexp literal
-  %s = process-comments(%s);
-  return %s;
-}
-
-multi sub process-char(%s is copy where {%s<a> ~~ / <[ ' " ]> /}) { # string literal
-  %s = put-literal(%s);
-  %s = preserve-endspace(%s);
-  return %s;
-}
-
-multi sub process-char(%s is copy where {%s<a> ~~ / <[+ -]> /}) { # careful with + + and - -
-  %s = action1(%s);
-  %s = collapse-whitespace(%s);
+# Handle + + and - -
+sub process-double-plus-minus(%s) {
   if (%s<a> && is-whitespace(%s<a>)) {
-     %s = (%s<b> && %s<b> eq %s<last>) ?? action1(%s) !! preserve-endspace(%s);
+    %s = (%s<b> && %s<b> eq %s<last>) ?? action1(%s) !! preserve-endspace(%s);
   }
   return %s;
-}
+};
 
-multi sub process-char(%s is copy where {is-alphanum(%s<a>)}) { # keyword, identifiers, numbers
-  %s = action1(%s);
-  %s = collapse-whitespace(%s);
+# Handle potential property invocations
+sub process-property-invocation(%s) {
   if (%s<a> && is-whitespace(%s<a>)) {
     # if %s<b> is '.' could be (12 .toString()) which is property invocation. If space removed becomes decimal point and error.
     %s = (%s<b> && (is-alphanum(%s<b>) || %s<b> eq '.')) ?? action1(%s) !! preserve-endspace(%s);
@@ -277,16 +187,146 @@ multi sub process-char(%s is copy where {is-alphanum(%s<a>)}) { # keyword, ident
   return %s;
 }
 
-multi sub process-char(%s is copy where {%s<a> ~~ / <[ \] } ) ]> /}) {
-  %s = action1(%s);
-  %s = preserve-endspace(%s);
-  return %s;
+#
+# process-comments
+#
+
+multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '/'}) { # a division, comment, or regexp literal
+  my %s2 = %s;
+  my $cc_flag = %s2<c> && %s2<c> eq '@'; # tests in IE7 show no space allowed between slashes and at symbol
+  repeat {
+    %s2 = $cc_flag ?? action2(%s2) !! action3(%s2);
+  } until (!%s2<a> || is-endspace(%s2<a>));
+  if %s2<a> { # %s<a> is a new line
+    if ($cc_flag) {
+      %s2 = (%s2
+             ==> action1() # cannot use preserve-endspace(%s) here because it might not print the new line
+             ==> skip-whitespace());
+    } elsif (%s2<last> && !is-endspace(%s2<last>) && !is-prefix(%s2<last>)) {
+      %s2 = preserve-endspace(%s2);
+    } else {
+      %s2 = skip-whitespace(%s2);
+    }
+  }
+  return %s2;
+}
+
+multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '*'}) { # slash-star comment
+  my %s2 = %s;
+  my $cc_flag = %s2<c> && %s2<c> eq '@'; # test in IE7 shows no space allowed between star and at symbol
+  repeat { 
+    %s2 = $cc_flag ?? action2(%s2) !! action3(%s2);
+  } until (!%s2<b> || (%s2<a> eq '*' && %s2<b> eq '/'));
+  if (%s2<b>) { # %s<a> is asterisk and %s<b> is foreslash
+    if ($cc_flag) {
+      %s2 = (%s2
+             ==> action2() # the *
+             ==> action2() # the /
+             # inside the conditional comment there may be a missing terminal semi-colon
+             ==> preserve-endspace());
+    } else { # the comment is being removed
+      %s2 = action3(%s2); # the *
+      %s2<a> = ' ';  # the /
+      %s2 = collapse-whitespace(%s2);
+      if (%s2<last> && %s2<b> &&
+        ((is-alphanum(%s2<last>) && (is-alphanum(%s2<b>)||%s2<b> eq '.')) ||
+        (%s2<last> eq '+' && %s2<b> eq '+') || (%s2<last> eq '-' && %s2<b> eq '-'))) { # for a situation like 5-/**/-2 or a/**/a
+        # When entering this block %s<a> is whitespace.
+        # The comment represented whitespace that cannot be removed. Therefore replace the now gone comment with a whitespace.
+        %s2 = action1(%s2);
+      } elsif (%s2<last> && !is-prefix(%s2<last>)) {
+        %s2 = preserve-endspace(%s2);
+      } else {
+        %s2 = skip-whitespace(%s2);
+      }
+    }
+  } else {
+    die 'unterminated comment, stopped';
+  }
+  return %s2;
+}
+
+multi sub process-comments(%s is copy where {%s<lastnws> && 
+                          (%s<lastnws> ~~ / <[ ) \] \. ]> / ||
+                           is-alphanum(%s<lastnws>))}) {  # division
+  return (%s
+         ==> action1()
+         ==> collapse-whitespace()
+         # don't want closing delimiter to
+         # become a slash-slash comment with
+         # following conditional comment
+         ==> process-conditional-comment() );
+}
+
+
+multi sub process-comments(%s is copy where {%s<a> ~~ '/' and %s<b> ~~ '.' }) {
+
+  return (%s
+          ==> collapse-whitespace()
+          ==> action1());
+}
+
+multi sub process-comments(%s is copy) {
+
+  return (%s
+          ==> put-literal()
+          ==> collapse-whitespace()
+          # don't want closing delimiter to
+          # become a slash-slash comment with
+          # following conditional comment
+          ==> process-conditional-comment() );
+
+}
+
+#
+# process-char
+#
+
+multi sub process-char(%s where {%s<a> eq '/'}) { # a division, comment, or regexp literal
+
+  return process-comments(%s);
+
+}
+
+multi sub process-char(%s where {%s<a> ~~ / <[ ' " ]> /}) { # string literal
+
+  return (%s
+          ==> put-literal()
+          ==> preserve-endspace());
+
+}
+
+multi sub process-char(%s where {%s<a> ~~ / <[+ -]> /}) { # careful with + + and - -
+
+  return (%s
+          ==> action1()
+          ==> collapse-whitespace()
+          ==> process-double-plus-minus());
+}
+
+multi sub process-char(%s where {is-alphanum(%s<a>)}) { # keyword, identifiers, numbers
+
+  return (%s
+          ==> action1()
+          ==> collapse-whitespace()
+          ==> process-property-invocation());
+
+}
+
+multi sub process-char(%s where {%s<a> ~~ / <[ \] } ) ]> /}) {
+
+  return (%s
+          ==> action1()
+          ==> preserve-endspace());
+
 }
 
 multi sub process-char(%s is copy) {
-  %s = action1(%s);
-  %s = skip-whitespace(%s);
-  return %s;
+
+  return (%s
+          ==> action1()
+          ==> skip-whitespace());
+
 }
 
 #
@@ -321,15 +361,18 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
 
   # Initialize the buffer.
   repeat {
-    %s = get(%s, 'a');
+    %s = get(%s, key => 'a');
   } while (%s<a> && is-whitespace(%s<a>));
-  %s = get(%s, 'b');
-  %s = get(%s, 'c');
-  %s = get(%s, 'd');
+
+  %s = (%s
+        ==> get(key => 'b') 
+        ==> get(key => 'c')
+        ==> get(key => 'd'));
+
   %s<last>    = ''; # assign for safety
   %s<lastnws> = ''; # assign for safety
 
-  while (%s<a>) { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
+  while %s<a> { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
     
     if (is-whitespace(%s<a>)) { # check that this program is running correctly
       die 'minifier bug: minify while loop starting with whitespace, stopped';
