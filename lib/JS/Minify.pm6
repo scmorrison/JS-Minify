@@ -33,20 +33,30 @@ sub is-postfix($x) {
 }
 
 sub get($input, $input_type, $input_pos is copy, $last_read_char is copy) { 
+
   if ($input_type eq 'file') {
+
     my $char = getc($input);
     my $new_last_read_char = $char;
     return $char.Bool ?? $char !! '', $new_last_read_char, $input_pos;
+
   } elsif ($input_type eq 'string') {
+
     if ($input_pos < $input.chars) {
+
       my $new_last_read_char = substr($input, $input_pos++, 1);
       my $char = $new_last_read_char;
       return $char, $new_last_read_char, $input_pos;
+
     } else { # Simulate getc() when off the end of the input string.
+
       return '', $last_read_char, $input_pos;
+
     }
   } else {
+
    die "no input";
+
   }
 }
 
@@ -159,7 +169,6 @@ sub preserve-endspace(%s is copy) {
 }
 
 sub on-whitespace-conditional-comment($a, $b, $c, $d) {
-#sub on-whitespace-conditional-comment(%s) {
   return ($a && is-whitespace($a) &&
           $b && $b eq '/' &&
           $c && ($c ~~ / <[ / * ]> /) &&
@@ -193,58 +202,56 @@ sub process-property-invocation(%s) {
 #
 
 multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '/'}) { # a division, comment, or regexp literal
-  my %s2 = %s;
-  my $cc_flag = %s2<c> && %s2<c> eq '@'; # tests in IE7 show no space allowed between slashes and at symbol
+  my $cc_flag = %s<c> && %s<c> eq '@'; # tests in IE7 show no space allowed between slashes and at symbol
   repeat {
-    %s2 = $cc_flag ?? action2(%s2) !! action3(%s2);
-  } until (!%s2<a> || is-endspace(%s2<a>));
-  if %s2<a> { # %s<a> is a new line
+    %s = $cc_flag ?? action2(%s) !! action3(%s);
+  } until (!%s<a> || is-endspace(%s<a>));
+  if %s<a> { # %s<a> is a new line
     if ($cc_flag) {
-      %s2 = (%s2
-             ==> action1() # cannot use preserve-endspace(%s) here because it might not print the new line
-             ==> skip-whitespace());
-    } elsif (%s2<last> && !is-endspace(%s2<last>) && !is-prefix(%s2<last>)) {
-      %s2 = preserve-endspace(%s2);
+      %s = (%s
+            ==> action1() # cannot use preserve-endspace(%s) here because it might not print the new line
+            ==> skip-whitespace());
+    } elsif (%s<last> && !is-endspace(%s<last>) && !is-prefix(%s<last>)) {
+      %s = preserve-endspace(%s);
     } else {
-      %s2 = skip-whitespace(%s2);
+      %s = skip-whitespace(%s);
     }
   }
-  return %s2;
+  return %s;
 }
 
 multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '*'}) { # slash-star comment
-  my %s2 = %s;
-  my $cc_flag = %s2<c> && %s2<c> eq '@'; # test in IE7 shows no space allowed between star and at symbol
+  my $cc_flag = %s<c> && %s<c> eq '@'; # test in IE7 shows no space allowed between star and at symbol
   repeat { 
-    %s2 = $cc_flag ?? action2(%s2) !! action3(%s2);
-  } until (!%s2<b> || (%s2<a> eq '*' && %s2<b> eq '/'));
-  if (%s2<b>) { # %s<a> is asterisk and %s<b> is foreslash
+    %s = $cc_flag ?? action2(%s) !! action3(%s);
+  } until (!%s<b> || (%s<a> eq '*' && %s<b> eq '/'));
+  if (%s<b>) { # %s<a> is asterisk and %s<b> is foreslash
     if ($cc_flag) {
-      %s2 = (%s2
+      %s = (%s
              ==> action2() # the *
              ==> action2() # the /
              # inside the conditional comment there may be a missing terminal semi-colon
              ==> preserve-endspace());
     } else { # the comment is being removed
-      %s2 = action3(%s2); # the *
-      %s2<a> = ' ';  # the /
-      %s2 = collapse-whitespace(%s2);
-      if (%s2<last> && %s2<b> &&
-        ((is-alphanum(%s2<last>) && (is-alphanum(%s2<b>)||%s2<b> eq '.')) ||
-        (%s2<last> eq '+' && %s2<b> eq '+') || (%s2<last> eq '-' && %s2<b> eq '-'))) { # for a situation like 5-/**/-2 or a/**/a
+      %s = action3(%s); # the *
+      %s<a> = ' ';  # the /
+      %s = collapse-whitespace(%s);
+      if (%s<last> && %s<b> &&
+        ((is-alphanum(%s<last>) && (is-alphanum(%s<b>)||%s<b> eq '.')) ||
+        (%s<last> eq '+' && %s<b> eq '+') || (%s<last> eq '-' && %s<b> eq '-'))) { # for a situation like 5-/**/-2 or a/**/a
         # When entering this block %s<a> is whitespace.
         # The comment represented whitespace that cannot be removed. Therefore replace the now gone comment with a whitespace.
-        %s2 = action1(%s2);
-      } elsif (%s2<last> && !is-prefix(%s2<last>)) {
-        %s2 = preserve-endspace(%s2);
+        %s = action1(%s);
+      } elsif (%s<last> && !is-prefix(%s<last>)) {
+        %s = preserve-endspace(%s);
       } else {
-        %s2 = skip-whitespace(%s2);
+        %s = skip-whitespace(%s);
       }
     }
   } else {
     die 'unterminated comment, stopped';
   }
-  return %s2;
+  return %s;
 }
 
 multi sub process-comments(%s is copy where {%s<lastnws> && 
