@@ -32,17 +32,18 @@ sub is-postfix($x) {
   return ($x ~~ / <[ \} \) \] ]> /).Bool || is-infix($x);
 }
 
-sub get(%s is copy, :$key) { 
+sub get(%s is copy) { 
   if (%s<input_type> eq 'file') {
     my $char = getc(%s<input>);
-    %s<last_read_char> = $char;
-    %s{$key} = $char.Bool ?? $char !! '';
+    my $last_read_char = $char;
+    return $char.Bool ?? $char !! '', $last_read_char, %s<input_pos>;
   } elsif (%s<input_type> eq 'string') {
     if (%s<input_pos> < %s<input>.chars) {
-      %s<last_read_char> = substr(%s<input>, %s<input_pos>++, 1);
-      %s{$key} = %s<last_read_char>;
+      my $last_read_char = substr(%s<input>, %s<input_pos>++, 1);
+      my $char = $last_read_char;
+      return $char, $last_read_char, %s<input_pos>;
     } else { # Simulate getc() when off the end of the input string.
-      %s{$key} = '';
+      return '', %s<last_read_char>, %s<input_pos>;
     }
   } else {
    die "no input";
@@ -67,7 +68,7 @@ sub put(%s is copy, $x) {
 # new d
 #
 # i.e. print a and advance
-sub action1(%s is copy) {
+sub action1(%s) {
   if (!is-whitespace(%s<a>)) {
     %s<lastnws> = %s<a>;    
   }
@@ -76,7 +77,7 @@ sub action1(%s is copy) {
 }
 
 # sneeky output %s<a> for comments
-sub action2(%s is copy) {
+sub action2(%s) {
   %s = put(%s, %s<a>);
   return action3(%s);
 }
@@ -87,7 +88,7 @@ sub action2(%s is copy) {
 # new d
 #
 # i.e. delete a
-sub action3(%s is copy) {
+sub action3(%s) {
   %s<a> = %s<b>;
   return action4(%s);
 }
@@ -100,7 +101,7 @@ sub action3(%s is copy) {
 sub action4(%s is copy) {
   %s<b> = %s<c>;
   %s<c> = %s<d>;
-  %s = get(%s, key => 'd');
+  (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s);
   return %s;
 }
 
@@ -116,7 +117,7 @@ sub put-literal(%s is copy) {
     }
     %s = action1(%s);
   } until (%s<last> eq $delimiter || !%s<a>);
-  if (%s<last> !eq $delimiter) { # ran off end of file before printing the closing delimiter
+  if (%s<last> ne $delimiter) { # ran off end of file before printing the closing delimiter
     die 'unterminated single quoted string literal, stopped' if $delimiter eq '\'';
     die 'unterminated double quoted string literal, stopped' if $delimiter eq '"';
     die 'unterminated regular expression literal, stopped';
@@ -339,7 +340,8 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
   # as others. Easier refactoring.
 
   # hash reference for "state". This module
-  my %s = input => ($strip_debug == 1 ?? $input.subst( /';;;' <-[\n]>+/, '', :g) !! $input);
+  my %s = input => ($strip_debug == 1 ?? $input.subst( /';;;' <-[\n]>+/, '', :g) !! $input),
+          last_read_char => 0;
 
   # determine if the the input is a string or a file handle.
   if ($input && $input.WHAT ~~ Str) {
@@ -361,13 +363,12 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
 
   # Initialize the buffer.
   repeat {
-    %s = get(%s, key => 'a');
+    (%s<a>, %s<last_read_char>, %s<input_pos>) = get(%s);
   } while (%s<a> && is-whitespace(%s<a>));
 
-  %s = (%s
-        ==> get(key => 'b') 
-        ==> get(key => 'c')
-        ==> get(key => 'd'));
+  (%s<b>, %s<last_read_char>, %s<input_pos>) = get(%s);
+  (%s<c>, %s<last_read_char>, %s<input_pos>) = get(%s);
+  (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s);
 
   %s<last>    = ''; # assign for safety
   %s<lastnws> = ''; # assign for safety
