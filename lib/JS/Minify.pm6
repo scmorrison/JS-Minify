@@ -158,16 +158,17 @@ sub preserve-endspace(%s is copy) {
   return %s;
 }
 
-sub on-whitespace-conditional-comment(%s) {
-  return (%s<a> && is-whitespace(%s<a>) &&
-          %s<b> && %s<b> eq '/' &&
-          %s<c> && (%s<c> ~~ / <[ / * ]> /) &&
-          %s<d> && %s<d> eq '@');
+sub on-whitespace-conditional-comment($a, $b, $c, $d) {
+#sub on-whitespace-conditional-comment(%s) {
+  return ($a && is-whitespace($a) &&
+          $b && $b eq '/' &&
+          $c && ($c ~~ / <[ / * ]> /) &&
+          $d && $d eq '@');
 }
 
 # Shift char or preserve endspace toggle
 sub process-conditional-comment(%s) {
-  return on-whitespace-conditional-comment(%s) ?? action1(%s) !! preserve-endspace(%s);
+  return on-whitespace-conditional-comment(%s<a>, %s<b>, %s<c>, %s<d>) ?? action1(%s) !! preserve-endspace(%s);
 }
 
 # Handle + + and - -
