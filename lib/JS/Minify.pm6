@@ -110,15 +110,15 @@ sub put-literal(%s is copy) {
   my $delimiter = %s<a>; # ', " or /
   %s = action1(%s);
   repeat {
-    while (%s<a> && %s<a> ~~ '\\') { # escape character only escapes only the next one character
+    while (%s<a> && %s<a> eq '\\') { # escape character only escapes only the next one character
       %s = action1(%s);
       %s = action1(%s);
     }
     %s = action1(%s);
-  } until (%s<last> ~~ $delimiter || !%s<a>);
-  if (%s<last> !~~ $delimiter) { # ran off end of file before printing the closing delimiter
-    die 'unterminated single quoted string literal, stopped' if $delimiter ~~ '\'';
-    die 'unterminated double quoted string literal, stopped' if $delimiter ~~ '"';
+  } until (%s<last> eq $delimiter || !%s<a>);
+  if (%s<last> !eq $delimiter) { # ran off end of file before printing the closing delimiter
+    die 'unterminated single quoted string literal, stopped' if $delimiter eq '\'';
+    die 'unterminated double quoted string literal, stopped' if $delimiter eq '"';
     die 'unterminated regular expression literal, stopped';
   }
   return %s;
@@ -259,7 +259,7 @@ multi sub process-comments(%s is copy where {%s<lastnws> &&
 }
 
 
-multi sub process-comments(%s is copy where {%s<a> ~~ '/' and %s<b> ~~ '.' }) {
+multi sub process-comments(%s is copy where {%s<a> eq '/' and %s<b> eq '.' }) {
 
   return (%s
           ==> collapse-whitespace()
