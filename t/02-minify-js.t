@@ -26,11 +26,12 @@ sub filesMatch($file1, $file2) {
 }
 
 sub min-test($filename) {
-  my $infile = open "t/scripts/$filename.js", :r or die("couldn't open file");
-  my $gotfile = open "t/scripts/{$filename}-got.js" or die("couldn't open file");
+  note $filename;
+  my $infile = open("t/scripts/$filename.js", :r) or die("couldn't open file");
+  my $gotfile = open("t/scripts/{$filename}-got.js", :rw) or die("couldn't open file");
   js-minify(input => $infile, outfile => $gotfile);
-  my $expectedfile = open "t/scripts/{$filename}-expected.js", :r or die("couldn't open file");
-  $gotfile = open "t/scripts/{$filename}-got.js", :r or die("couldn't open file");
+  my $expectedfile = open("t/scripts/{$filename}-expected.js", :r) or die("couldn't open file");
+  $gotfile = open("t/scripts/{$filename}-got.js", :r) or die("couldn't open file");
   ok filesMatch($gotfile, $expectedfile), "testing $filename";
 }
 
