@@ -361,7 +361,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
   %s<last>    = ''; # assign for safety
   %s<lastnws> = ''; # assign for safety
 
-  start {
+  my $minify_thread = Thread.start({
     while %s<a> { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
       
       if (is-whitespace(%s<a>)) { # check that this program is running correctly
@@ -378,7 +378,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
 
     # Send 'done' to exit react/whenever block
     %s<output>.send('done');
-  };
+  });
 
   # Capture output when no outfile
   my $output;
