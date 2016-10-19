@@ -4,32 +4,32 @@ unit module Minify::JS;
 
 # return true if the character is allowed in identifier.
 sub is-alphanum($x) {
-  return ($x ~~ /<[ \w \$ \\ ]>/).Bool || ord($x) > 126;
+  return '$\\'.contains($x) || ord($x) > 126 || $x ~~ / \w / ;
 }
 
 sub is-endspace($x) {
-  return ($x ~~ "\n"|"\r"|"\f");
+  return "\n\r\f".contains($x);
 }
 
 sub is-whitespace($x) {
-  return ($x ~~ ' '|"\t" || is-endspace($x));
+  return " \t".contains($x) || is-endspace($x);
 }
 
 # New line characters before or after these characters can be removed.
 # Not + - / in this list because they require special care.
 sub is-infix($x) {
-  return ($x ~~ / <[, ; : = & % * < > \? \| \n ]> /).Bool;
+  return ",;:=&%*<>?|\n".contains($x);
 }
 
 # New line characters after these characters can be removed.
 sub is-prefix($x) {
-  return ($x ~~ / <[ \{ \( \[ ! ]> /).Bool || is-infix($x);
+  return '{([!'.contains($x) || is-infix($x);
 }
 
 # New line characters before these characters can removed.
 
 sub is-postfix($x) {
-  return ($x ~~ / <[ \} \) \] ]> /).Bool || is-infix($x);
+  return '})]'.contains($x) || is-infix($x);
 }
 
 sub get($input, $input_type, $input_pos is copy, $last_read_char is copy) { 
@@ -162,7 +162,7 @@ sub preserve-endspace(%s is copy) {
 sub on-whitespace-conditional-comment($a, $b, $c, $d) {
   return ($a && is-whitespace($a) &&
           $b && $b eq '/' &&
-          $c && ($c eq '/' || $c eq '*') &&
+          $c && '/*'.contains($c) &&
           $d && $d eq '@');
 }
 
@@ -246,7 +246,7 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '*'}) { # slash-s
 }
 
 multi sub process-comments(%s is copy where {%s<lastnws> && 
-                          (%s<lastnws> ~~ / <[ ) \] \. ]> / ||
+                          (')].'.contains(%s<lastnws>) ||
                            is-alphanum(%s<lastnws>))}) {  # division
   return (%s
          ==> action1()
@@ -287,7 +287,7 @@ multi sub process-char(%s where {%s<a> eq '/'}) { # a division, comment, or rege
 
 }
 
-multi sub process-char(%s where {%s<a> ~~ / <[ ' " ]> /}) { # string literal
+multi sub process-char(%s where {"'\"".contains(%s<a>)}) { # string literal
 
   return (%s
           ==> put-literal()
@@ -295,7 +295,7 @@ multi sub process-char(%s where {%s<a> ~~ / <[ ' " ]> /}) { # string literal
 
 }
 
-multi sub process-char(%s where {%s<a> ~~ / <[+ -]> /}) { # careful with + + and - -
+multi sub process-char(%s where {'+-'.contains(%s<a>)}) { # careful with + + and - -
 
   return (%s
           ==> action1()
@@ -312,7 +312,7 @@ multi sub process-char(%s where {is-alphanum(%s<a>)}) { # keyword, identifiers, 
 
 }
 
-multi sub process-char(%s where {%s<a> ~~ / <[ \] } ) ]> /}) {
+multi sub process-char(%s where {']})'.contains(%s<a>)}) {
 
   return (%s
           ==> action1()
@@ -346,7 +346,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
 
   # Print the copyright notice first
   if ($copyright) {
-    %s<output>.send('/* ' ~ $copyright ~ ' */');
+    %s<output>.send("/* $copyright */");
   }
 
   # Initialize the buffer.
@@ -361,7 +361,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
   %s<last>    = ''; # assign for safety
   %s<lastnws> = ''; # assign for safety
 
-  my $minify_thread = Thread.start({
+  my $minify_p = start {
     while %s<a> { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
       
       if (is-whitespace(%s<a>)) { # check that this program is running correctly
@@ -372,13 +372,13 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
       %s = process-char(%s);
     }
     
-    if ( %s<last_read_char> and %s<last_read_char> ~~ /\n/ ) {
+    if ( %s<last_read_char> and %s<last_read_char> eq "\n" ) {
       %s<output>.send('\n');
     }
 
     # Send 'done' to exit react/whenever block
     %s<output>.send('done');
-  });
+  };
 
   # Capture output when no outfile
   my $output;
@@ -394,6 +394,8 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
       $output ~= $c;
     }
   }
+
+  await $minify_p;
 
   # Print to outfile or return output
   if $outfile {
