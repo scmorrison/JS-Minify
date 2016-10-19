@@ -53,21 +53,12 @@ sub get($input, $input_type, $input_pos is copy, $last_read_char is copy) {
       return '', $last_read_char, $input_pos;
 
     }
+
   } else {
 
    die "no input";
 
   }
-}
-
-sub put(%s is copy, $x) {
-  my $outfile = (%s<outfile>);
-  if %s<outfile> {
-    spurt $outfile, $x;
-  } else {
-    %s<output> ~= $x;
-  }
-  return %s;
 }
 
 # print a
@@ -87,7 +78,7 @@ sub action1(%s) {
 
 # sneeky output %s<a> for comments
 sub action2(%s) {
-  %s = put(%s, %s<a>);
+  %s<output>.send(%s<a>);
   return action3(%s);
 }
 
@@ -171,7 +162,7 @@ sub preserve-endspace(%s is copy) {
 sub on-whitespace-conditional-comment($a, $b, $c, $d) {
   return ($a && is-whitespace($a) &&
           $b && $b eq '/' &&
-          $c && ($c ~~ / <[ / * ]> /) &&
+          $c && ($c eq '/' || $c eq '*') &&
           $d && $d eq '@');
 }
 
@@ -341,31 +332,21 @@ multi sub process-char(%s is copy) {
 # js-minify
 #
 
-sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip_debug = 0) is export {
+sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is export {
 
   # Immediately turn hash into a hash reference so that notation is the same in this function
   # as others. Easier refactoring.
 
   # hash reference for "state". This module
-  my %s = input => ($strip_debug == 1 ?? $input.subst( /';;;' <-[\n]>+/, '', :g) !! $input),
-          last_read_char => 0;
-
-  # determine if the the input is a string or a file handle.
-  if ($input && $input.WHAT ~~ Str) {
-    %s<input_pos>  = 0;
-    %s<input_type> = 'string';
-  } else {
-    %s<input_type> = 'file';
-  }
-
-  # Determine if the output is to a string or a file.
-  if (!$outfile) {
-    %s<output> = '';
-  }
+  my %s = input          => ($strip_debug == 1 ?? $input.subst( /';;;' <-[\n]>+/, '', :g) !! $input),
+          last_read_char => 0,
+          input_pos      => 0,
+          input_type     => $input && $input.WHAT ~~ Str ?? 'string' !! 'file',
+          output         => Channel.new;
 
   # Print the copyright notice first
   if ($copyright) {
-    %s = put(%s, '/* ' ~ $copyright ~ ' */');
+    %s<output>.send('/* ' ~ $copyright ~ ' */');
   }
 
   # Initialize the buffer.
@@ -380,22 +361,45 @@ sub js-minify(:$input!, :$copyright = '', :$output = '', :$outfile = '', :$strip
   %s<last>    = ''; # assign for safety
   %s<lastnws> = ''; # assign for safety
 
-  while %s<a> { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
-    
-    if (is-whitespace(%s<a>)) { # check that this program is running correctly
-      die 'minifier bug: minify while loop starting with whitespace, stopped';
+  start {
+    while %s<a> { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
+      
+      if (is-whitespace(%s<a>)) { # check that this program is running correctly
+        die 'minifier bug: minify while loop starting with whitespace, stopped';
+      }
+      
+      # Each branch handles trailing whitespace and ensures %s<a> is on non-whitespace or '' when branch finishes
+      %s = process-char(%s);
     }
     
-    # Each branch handles trailing whitespace and ensures %s<a> is on non-whitespace or '' when branch finishes
-    %s = process-char(%s);
+    if ( %s<last_read_char> and %s<last_read_char> ~~ /\n/ ) {
+      %s<output>.send('\n');
+    }
+
+    # Send 'done' to exit react/whenever block
+    %s<output>.send('done');
+  };
+
+  # Capture output when no outfile
+  my $output;
+
+  for %s<output>.list -> $c {
+    # Exit when 'done'
+    last if $c eq 'done';
+    # Write to outfile
+    if $outfile {
+      $outfile.print($c);
+    } else {
+      # Store to output
+      $output ~= $c;
+    }
   }
-  
-  if ( %s<last_read_char> and %s<last_read_char> ~~ /\n/ ) {
-    %s = put(%s, '\n');
+
+  # Print to outfile or return output
+  if $outfile {
+    $outfile.close;
+  } else {
+    %s<output>.close;
+    return $output;
   }
-  
-  if (!%s<outfile>) {
-    return %s<output>;
-  }
-  
 }
