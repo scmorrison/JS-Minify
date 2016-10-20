@@ -32,25 +32,24 @@ sub is-postfix($x) {
   return '})]'.contains($x) || is-infix($x);
 }
 
-sub get($input, $input_type, $input_pos is copy, $last_read_char is copy) { 
+sub get(%s is copy) { 
+  if (%s<input_type> eq 'file') {
 
-  if ($input_type eq 'file') {
-
-    my $char = getc($input);
+    my $char = getc(%s<input>);
     my $new_last_read_char = $char;
-    return $char.Bool ?? $char !! '', $new_last_read_char, $input_pos;
+    return $char.Bool ?? $char !! '', $new_last_read_char, %s<input_pos>;
 
-  } elsif ($input_type eq 'string') {
+  } elsif (%s<input_type> eq 'string') {
 
-    if ($input_pos < $input.chars) {
+    if (%s<input_pos> < %s<input>.chars) {
 
-      my $new_last_read_char = substr($input, $input_pos++, 1);
+      my $new_last_read_char = substr(%s<input>, %s<input_pos>++, 1);
       my $char = $new_last_read_char;
-      return $char, $new_last_read_char, $input_pos;
+      return $char, $new_last_read_char, %s<input_pos>;
 
     } else { # Simulate getc() when off the end of the input string.
 
-      return '', $last_read_char, $input_pos;
+      return '', %s<last_read_char>, %s<input_pos>;
 
     }
 
@@ -101,7 +100,7 @@ sub action3(%s) {
 sub action4(%s is copy) {
   %s<b> = %s<c>;
   %s<c> = %s<d>;
-  (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s<input>, %s<input_type>, %s<input_pos>, %s<last_read_char>); 
+  (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s); 
   return %s;
 }
 
@@ -351,12 +350,12 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
 
   # Initialize the buffer.
   repeat {
-    (%s<a>, %s<last_read_char>, %s<input_pos>) = get(%s<input>, %s<input_type>, %s<input_pos>, %s<last_read_char>); 
+    (%s<a>, %s<last_read_char>, %s<input_pos>) = get(%s); 
   } while (%s<a> && is-whitespace(%s<a>));
 
-  (%s<b>, %s<last_read_char>, %s<input_pos>) = get(%s<input>, %s<input_type>, %s<input_pos>, %s<last_read_char>); 
-  (%s<c>, %s<last_read_char>, %s<input_pos>) = get(%s<input>, %s<input_type>, %s<input_pos>, %s<last_read_char>); 
-  (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s<input>, %s<input_type>, %s<input_pos>, %s<last_read_char>); 
+  (%s<b>, %s<last_read_char>, %s<input_pos>) = get(%s); 
+  (%s<c>, %s<last_read_char>, %s<input_pos>) = get(%s);
+  (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s); 
 
   %s<last>    = ''; # assign for safety
   %s<lastnws> = ''; # assign for safety
