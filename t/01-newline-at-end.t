@@ -12,13 +12,11 @@ plan 2;
  
 my $js_with_new_line = q:to/EOS/;
 function (s) { alert("Foo"); }
-
 EOS
- 
-my $js_without_new_line = $js_with_new_line.chomp;
 
 my $t1 = js-minify(input => $js_with_new_line);
-like $t1, /'\n'$/, 'Last new line was preserved';
+like $t1, / '\n' $/, 'Last new line was preserved';
  
+my $js_without_new_line = $js_with_new_line.chomp;
 my $t2 = js-minify(input => $js_without_new_line);
 like $t2, /<-[\n]>$/, 'Last new line was not added because it was absent originally',
