@@ -33,23 +33,18 @@ sub is-postfix($x) {
 }
 
 sub get(%s is copy) { 
-  if (%s<input_type> eq 'file') {
 
-    my $char = getc(%s<input>);
-    my $new_last_read_char = $char;
-    return $char.Bool ?? $char !! '', $new_last_read_char, %s<input_pos>;
+  if (%s<input>.elems > 0) {
 
-  } elsif (%s<input_type> eq 'string') {
+    if (%s<input_pos> <= %s<input>.elems) {
 
-    if (%s<input_pos> < %s<input>.chars) {
-
-      my $new_last_read_char = substr(%s<input>, %s<input_pos>++, 1);
-      my $char = $new_last_read_char;
-      return $char, $new_last_read_char, %s<input_pos>;
+      my $char = %s<input>[%s<input_pos>];
+      my $last_read_char = %s<input>[%s<input_pos>++];
+      return $char ?? $char !! '', $last_read_char, %s<input_pos>;
 
     } else { # Simulate getc() when off the end of the input string.
 
-      return '', %s<last_read_char>, %s<input_pos>;
+      return "", %s<last_read_char>, %s<input_pos>;
 
     }
 
@@ -58,6 +53,7 @@ sub get(%s is copy) {
    die "no input";
 
   }
+
 }
 
 # print a
@@ -336,12 +332,20 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
   # Immediately turn hash into a hash reference so that notation is the same in this function
   # as others. Easier refactoring.
 
+  # Capture inpute / readchars from file into string
+  my $input_new = ($input.WHAT ~~ Str ?? $input !! $input.readchars.chomp);
+
+  # Store all chars in List
+  my $input_list = ($strip_debug == 1 ?? $input_new.subst( /';;;' <-[\n]>+/, '', :g) !! $input_new).split("", :skip-empty).List.cache;
+
   # hash reference for "state". This module
-  my %s = input          => ($strip_debug == 1 ?? $input.subst( /';;;' <-[\n]>+/, '', :g) !! $input),
+  my %s = input          => $input_list,
+          strip_debug    => $strip_debug,
           last_read_char => 0,
           input_pos      => 0,
-          input_type     => $input && $input.WHAT ~~ Str ?? 'string' !! 'file',
-          output         => Channel.new;
+          output         => Channel.new,
+          last           => '', # assign for safety
+          lastnws        => ''; # assign for safety
 
   # Print the copyright notice first
   if ($copyright) {
@@ -352,13 +356,9 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
   repeat {
     (%s<a>, %s<last_read_char>, %s<input_pos>) = get(%s); 
   } while (%s<a> && is-whitespace(%s<a>));
-
   (%s<b>, %s<last_read_char>, %s<input_pos>) = get(%s); 
   (%s<c>, %s<last_read_char>, %s<input_pos>) = get(%s);
   (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s); 
-
-  %s<last>    = ''; # assign for safety
-  %s<lastnws> = ''; # assign for safety
 
   my $minify_p = start {
     while %s<a> { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
@@ -371,7 +371,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
       %s = process-char(%s);
     }
     
-    if ( %s<last_read_char> and %s<last_read_char> eq "\n" ) {
+    if ( %s<input>.tail eq "\n" ) {
       %s<output>.send('\n');
     }
 
@@ -394,6 +394,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
     }
   }
 
+  # Wait for promise to keep
   await $minify_p;
 
   # Print to outfile or return output
