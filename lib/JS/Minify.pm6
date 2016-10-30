@@ -40,7 +40,7 @@ sub get(%s is copy) {
 
       my $char = %s<input>[%s<input_pos>];
       my $last_read_char = %s<input>[%s<input_pos>++];
-      return $char ?? $char !! '', $last_read_char, %s<input_pos>;
+      return $char ?? $char !! "", $last_read_char, %s<input_pos>;
 
     } else { # Simulate getc() when off the end of the input string.
 
@@ -382,6 +382,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
   # Capture output when no outfile
   my $output;
 
+  # Read from Channel
   for %s<output>.list -> $c {
     # Exit when 'done'
     last if $c eq 'done';
@@ -401,7 +402,6 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
   if $outfile {
     $outfile.close;
   } else {
-    %s<output>.close;
     return $output;
   }
 }

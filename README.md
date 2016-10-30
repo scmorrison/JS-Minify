@@ -1,10 +1,15 @@
 # JS::Minify [![Build Status](https://travis-ci.org/scmorrison/JS-Minify.svg?branch=master)](https://travis-ci.org/scmorrison/JS-Minify)
 
-JavaScript minifier module for [Perl 6](https://perl6.org). This is a port of the [Perl](https://perl.org) [JavaScript::Minifier](https://metacpan.org/pod/JavaScript::Minifier) module.
+JS::Minify removes comments and unnecessary whitespace from JavaScript files. It typically reduces filesize by half, resulting in faster downloads. This is a Perl 6 port of [JSMin](https://github.com/douglascrockford/JSMin) originally created by Douglas Crawford. JS::Minify incorporates several bug-fixes that have been resolved in various JSMin ports from other languages (Perl, Python, etc.).
+
+JS::Minify is considered safe:
+
+* Quoted strings and regular expression literals are not modified
+* No obfuscation or renaming occurs.
 
 # Synopsis
 
-To minify a JavaScript file and have the output written directly to another file
+Minify a JavaScript file and have the output written directly to another file:
 
 ```perl6
 use JS::Minify;
@@ -15,26 +20,28 @@ my $out = open 'myScript-min.js' or die;
 js-minify(input => $in, outfile => $out);
 ```
 
-To minify a JavaScript string literal. Note that by omitting the outfile parameter the minified code is returned as a string.
+Minify a JavaScript string literal:
+
+*Note* Omitting the outfile parameter the minified code is returned as a string.
 
 ```perl6
 my $minified_javascript = js-minify(input => 'var x = 2;');
 ```
 
-To include a copyright comment at the top of the minified code.
+Include a copyright comment at the top of the minified code:
 
 ```
 js-minify(input => 'var x = 2;', copyright => 'BSD License');
 ```
 
-To treat ';;;' as '//' so that debugging code can be removed. This is a common JavaScript convention for minification.
+Treat ';;;' as '//' so that debugging code can be removed. This is a common JavaScript convention for minification:
 
 ```perl6
 js-minify(input => "var x = 2;\n;;;alert('hi');\nvar x = 2;", stripDebug => 1)
 # output: 'var x=2;var x=2;'
 ```
 
-The `input` parameter is mandatory. The `output`, `copyright`, and `strip_debug` parameters are optional and can be used in any combination.
+The `input` parameter is mandatory. The `outfile`, `copyright`, and `strip_debug` parameters are optional and can be used in any combination.
 
 # Description
 
@@ -68,6 +75,10 @@ You can obtain the latest source code and submit bug reports on the github repos
 * Eric Herrera, <herrera@10east.com>
 * Miller 'tmhall' Hall
 * Вячеслав 'vti' Тихановский
+
+The original JSMin was developed by Douglas Crockford:
+
+* [JSMin](https://github.com/douglascrockford/JSMin)
 
 # License Information
 
