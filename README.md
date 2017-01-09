@@ -14,8 +14,8 @@ Minify a JavaScript file and have the output written directly to another file:
 ```perl6
 use JS::Minify;
 
-my $js  = slurp 'myScript.js';
-spurt 'myScript-min.js', js-minify(input => $in);
+my $js = slurp 'myScript.js';
+spurt 'myScript-min.js', js-minify(input => $js);
 ```
 
 Minify a JavaScript string literal:
