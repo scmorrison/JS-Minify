@@ -14,15 +14,11 @@ Minify a JavaScript file and have the output written directly to another file:
 ```perl6
 use JS::Minify;
 
-my $in  = open 'myScript.js' or die;
-my $out = open 'myScript-min.js' or die;
-
-js-minify(input => $in, outfile => $out);
+my $js  = slurp 'myScript.js';
+spurt 'myScript-min.js', js-minify(input => $in);
 ```
 
 Minify a JavaScript string literal:
-
-*Note* Omitting the outfile parameter the minified code is returned as a string.
 
 ```perl6
 my $minified_javascript = js-minify(input => 'var x = 2;');
@@ -41,7 +37,7 @@ js-minify(input => "var x = 2;\n;;;alert('hi');\nvar x = 2;", stripDebug => 1)
 # output: 'var x=2;var x=2;'
 ```
 
-The `input` parameter is mandatory. The `outfile`, `copyright`, and `strip_debug` parameters are optional and can be used in any combination.
+The `input` parameter is mandatory. The `copyright` and `strip_debug` parameters are optional and can be used in any combination.
 
 # Description
 

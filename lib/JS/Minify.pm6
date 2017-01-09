@@ -243,32 +243,29 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '*'}) { # slash-s
 multi sub process-comments(%s is copy where {%s<lastnws> && 
                           (')].'.contains(%s<lastnws>) ||
                            is-alphanum(%s<lastnws>))}) {  # division
-  return (%s
-         ==> action1()
-         ==> collapse-whitespace()
-         # don't want closing delimiter to
-         # become a slash-slash comment with
-         # following conditional comment
-         ==> process-conditional-comment() );
+ (action1(%s)
+  ==> collapse-whitespace()
+  # don't want closing delimiter to
+  # become a slash-slash comment with
+  # following conditional comment
+  ==> process-conditional-comment());
 }
 
 
 multi sub process-comments(%s is copy where {%s<a> eq '/' and %s<b> eq '.' }) {
 
-  return (%s
-          ==> collapse-whitespace()
-          ==> action1());
+  (collapse-whitespace(%s)
+   ==> action1());
 }
 
 multi sub process-comments(%s is copy) {
 
-  return (%s
-          ==> put-literal()
-          ==> collapse-whitespace()
-          # don't want closing delimiter to
-          # become a slash-slash comment with
-          # following conditional comment
-          ==> process-conditional-comment() );
+  (put-literal(%s)
+   ==> collapse-whitespace()
+   # don't want closing delimiter to
+   # become a slash-slash comment with
+   # following conditional comment
+   ==> process-conditional-comment());
 
 }
 
@@ -278,48 +275,44 @@ multi sub process-comments(%s is copy) {
 
 multi sub process-char(%s where {%s<a> eq '/'}) { # a division, comment, or regexp literal
 
-  return process-comments(%s);
+  process-comments(%s);
 
 }
 
 multi sub process-char(%s where {"'\"".contains(%s<a>)}) { # string literal
 
-  return (%s
-          ==> put-literal()
-          ==> preserve-endspace());
+  (put-literal(%s)
+   ==> preserve-endspace());
 
 }
 
 multi sub process-char(%s where {'+-'.contains(%s<a>)}) { # careful with + + and - -
 
-  return (%s
-          ==> action1()
-          ==> collapse-whitespace()
-          ==> process-double-plus-minus());
+  (action1(%s)
+   ==> collapse-whitespace()
+   ==> process-double-plus-minus());
+
 }
 
 multi sub process-char(%s where {is-alphanum(%s<a>)}) { # keyword, identifiers, numbers
 
-  return (%s
-          ==> action1()
-          ==> collapse-whitespace()
-          ==> process-property-invocation());
+  (action1(%s)
+   ==> collapse-whitespace()
+   ==> process-property-invocation());
 
 }
 
 multi sub process-char(%s where {']})'.contains(%s<a>)}) {
 
-  return (%s
-          ==> action1()
-          ==> preserve-endspace());
+  (action1(%s)
+   ==> preserve-endspace());
 
 }
 
 multi sub process-char(%s is copy) {
 
-  return (%s
-          ==> action1()
-          ==> skip-whitespace());
+  (action1(%s)
+   ==> skip-whitespace());
 
 }
 
@@ -327,7 +320,7 @@ multi sub process-char(%s is copy) {
 # js-minify
 #
 
-sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is export {
+sub js-minify(:$input!, :$copyright = '', :$strip_debug = 0) is export {
 
   # Immediately turn hash into a hash reference so that notation is the same in this function
   # as others. Easier refactoring.
@@ -360,6 +353,7 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
   (%s<c>, %s<last_read_char>, %s<input_pos>) = get(%s);
   (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s); 
 
+  # Wrap main login in promise and await below
   my $minify_p = start {
     while %s<a> { # on this line %s<a> should always be a non-whitespace character or '' (i.e. end of file)
       
@@ -379,29 +373,21 @@ sub js-minify(:$input!, :$copyright = '', :$outfile = '', :$strip_debug = 0) is 
     %s<output>.send('done');
   };
 
-  # Capture output when no outfile
+  # Capture output
   my $output;
 
   # Read from Channel
   for %s<output>.list -> $c {
     # Exit when 'done'
     last if $c eq 'done';
-    # Write to outfile
-    if $outfile {
-      $outfile.print($c);
-    } else {
-      # Store to output
-      $output ~= $c;
-    }
+    # Store to output
+    $output ~= $c;
   }
 
-  # Wait for promise to keep
+  # Wait for main logig promise to keep
   await $minify_p;
 
-  # Print to outfile or return output
-  if $outfile {
-    $outfile.close;
-  } else {
-    return $output;
-  }
+  # return output
+  return $output;
+
 }

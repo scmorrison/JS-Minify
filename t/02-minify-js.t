@@ -5,33 +5,12 @@ use lib 'lib';
 use JS::Minify;
  
 plan 20;
- 
-sub filesMatch($file1, $file2) {
-  my $a;
-  my $b;
- 
-  while (1) {
-    $a = $file1.getc;
-    $b = $file2.getc;
- 
-    if (!$a && !$b) { # both files end at same place
-      return 1;
-    }
-    elsif (!$b || # file2 ends first
-           !$a || # file1 ends first
-           $a ne $b) { # a and b not the same
-      return 0;
-    }
-  }
-}
 
 sub min-test($filename) {
   my $infile = open("t/scripts/$filename.js", :r) or die("couldn't open file");
-  my $gotfile = open("t/scripts/{$filename}-got.js", :rw) or die("couldn't open file");
-  js-minify(input => $infile, outfile => $gotfile);
-  my $expectedfile = open("t/scripts/{$filename}-expected.js", :r) or die("couldn't open file");
-  $gotfile = open("t/scripts/{$filename}-got.js", :r) or die("couldn't open file");
-  ok filesMatch($gotfile, $expectedfile), "testing $filename";
+  my $minified = js-minify(input => $infile);
+  my $expected_output = slurp("t/scripts/{$filename}-expected.js", :r) or die("couldn't open file");
+  is $minified, $expected_output, "testing $filename";
 }
 
 min-test('s2');  # missing semi-colons
