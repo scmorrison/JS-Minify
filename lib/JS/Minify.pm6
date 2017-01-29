@@ -58,13 +58,13 @@ sub get(%s is copy) returns List {
 sub action1(%s) returns Hash {
   %s<lastnws> = %s<a> unless is-whitespace(%s<a>);
   %s<last> = %s<a>;
-  return action2(%s);
+  action2(%s);
 }
 
 # sneeky output %s<a> for comments
 sub action2(%s) returns Hash {
   %s<output>.send(%s<a>);
-  return action3(%s);
+  action3(%s);
 }
 
 # move b to a
@@ -75,7 +75,7 @@ sub action2(%s) returns Hash {
 # i.e. delete a
 sub action3(%s) returns Hash {
   %s<a> = %s<b>;
-  return action4(%s);
+  action4(%s);
 }
 
 # move c to b
@@ -102,12 +102,16 @@ sub put-literal(%s is copy) returns Hash {
     }
     %s = action1(%s);
   } until (%s<last> eq $delimiter || !%s<a>);
-  if (%s<last> ne $delimiter) { # ran off end of file before printing the closing delimiter
-    die 'unterminated single quoted string literal, stopped' if $delimiter eq '\'';
-    die 'unterminated double quoted string literal, stopped' if $delimiter eq '"';
-    die 'unterminated regular expression literal, stopped';
+
+  given %s<last> {
+    when * ne $delimiter { # ran off end of file before printing the closing delimiter
+      die 'unterminated single quoted string literal, stopped' if $delimiter eq '\'';
+      die 'unterminated double quoted string literal, stopped' if $delimiter eq '"';
+      die 'unterminated regular expression literal, stopped';
+    }
+    default { %s }
   }
-  return %s;
+
 }
 
 # If %s<a> is a whitespace then collapse all following whitespace.
@@ -136,8 +140,7 @@ sub skip-whitespace(%s is copy) returns Hash {
 sub preserve-endspace(%s is copy) returns Hash {
   %s = collapse-whitespace(%s);
   %s = action1(%s) when ( %s<a> && is-endspace(%s<a>) && %s<b> && !is-postfix(%s<b>) );
-  %s = skip-whitespace(%s);
-  return %s;
+  skip-whitespace(%s);
 }
 
 sub on-whitespace-conditional-comment($a, $b, $c, $d) returns Bool {
@@ -149,14 +152,17 @@ sub on-whitespace-conditional-comment($a, $b, $c, $d) returns Bool {
 
 # Shift char or preserve endspace toggle
 sub process-conditional-comment(%s) returns Hash {
-  on-whitespace-conditional-comment(%s<a>, %s<b>, %s<c>, %s<d>) ?? action1(%s) !! preserve-endspace(%s);
+  given on-whitespace-conditional-comment(|%s{'a' .. 'd'}) {
+    when * eq True { action1(%s) }
+    default { preserve-endspace(%s) }
+  }
 }
 
 # Handle + + and - -
 sub process-double-plus-minus(%s) returns Hash {
   given %s<a> {
     when is-whitespace(%s<a>) {
-      %s = (%s<b> && %s<b> eq %s<last>) ?? action1(%s) !! preserve-endspace(%s);
+      (%s<b> && %s<b> eq %s<last>) ?? action1(%s) !! preserve-endspace(%s);
     }
     default { %s }
   }
@@ -164,11 +170,13 @@ sub process-double-plus-minus(%s) returns Hash {
 
 # Handle potential property invocations
 sub process-property-invocation(%s) returns Hash {
-  if (%s<a> && is-whitespace(%s<a>)) {
-    # if %s<b> is '.' could be (12 .toString()) which is property invocation. If space removed becomes decimal point and error.
-    %s = (%s<b> && (is-alphanum(%s<b>) || %s<b> eq '.')) ?? action1(%s) !! preserve-endspace(%s);
-  }
-  return %s;
+  (given %s<a> {
+     when $_ && is-whitespace($_) {
+       # if %s<b> is '.' could be (12 .toString()) which is property invocation. If space removed becomes decimal point and error.
+      (%s<b> && (is-alphanum(%s<b>) || %s<b> eq '.')) ?? action1(%s) !! preserve-endspace(%s);
+     }
+     default { %s }
+   });
 }
 
 #
@@ -237,8 +245,8 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq '*'}) returns Has
 }
 
 multi sub process-comments(%s is copy where {%s<lastnws> && 
-                          (')].'.contains(%s<lastnws>) ||
-                           is-alphanum(%s<lastnws>))}) returns Hash {  # division
+                           (%s<lastnws> ~~ / <[ \) \] \. ]> /.Bool ||
+                            is-alphanum(%s<lastnws>))}) returns Hash {  # division
  (action1(%s)
   ==> collapse-whitespace()
   # don't want closing delimiter to
@@ -258,7 +266,7 @@ multi sub process-comments(%s is copy) returns Hash {
 
   (put-literal(%s)
    ==> collapse-whitespace()
-   # don't want closing delimiter to
+   # we don't want closing delimiter to
    # become a slash-slash comment with
    # following conditional comment
    ==> process-conditional-comment());
@@ -275,40 +283,40 @@ multi sub process-char(%s where {%s<a> eq '/'}) returns Hash { # a division, com
 
 }
 
-multi sub process-char(%s where {"'\"".contains(%s<a>)}) returns Hash { # string literal
+multi sub process-char(%s where { %s<a> ~~ / <[ ' " ]> /.Bool }) returns Hash { # string literal
 
-  (put-literal(%s)
-   ==> preserve-endspace());
+  put-literal(%s)
+  ==> preserve-endspace();
 
 }
 
-multi sub process-char(%s where {'+-'.contains(%s<a>)}) returns Hash { # careful with + + and - -
+multi sub process-char(%s where { %s<a> ~~ / <[ + -]> /.Bool }) returns Hash { # careful with + + and - -
 
-  (action1(%s)
-   ==> collapse-whitespace()
-   ==> process-double-plus-minus());
+  action1(%s)
+  ==> collapse-whitespace()
+  ==> process-double-plus-minus();
 
 }
 
 multi sub process-char(%s where {is-alphanum(%s<a>)}) returns Hash { # keyword, identifiers, numbers
 
-  (action1(%s)
-   ==> collapse-whitespace()
-   ==> process-property-invocation());
+  action1(%s)
+  ==> collapse-whitespace()
+  ==> process-property-invocation();
 
 }
 
-multi sub process-char(%s where {']})'.contains(%s<a>)}) returns Hash {
+multi sub process-char(%s where {%s<a> ~~ / <[ \] \} \) ]> /.Bool }) returns Hash {
 
-  (action1(%s)
-   ==> preserve-endspace());
+  action1(%s)
+  ==> preserve-endspace();
 
 }
 
 multi sub process-char(%s is copy) returns Hash {
 
-  (action1(%s)
-   ==> skip-whitespace());
+  action1(%s)
+  ==> skip-whitespace();
 
 }
 
@@ -321,7 +329,7 @@ sub output-manager($output, $stream) returns Promise {
   my $p = Promise.start({
     my $output_text;
     # Read from client supplied channel
-    for $output.list -> $c {
+    $output.list.map: -> $c {
       given $stream {
         when Channel {
           # Exit when 'done'
@@ -362,10 +370,13 @@ sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) i
   my $input_new = ($input.WHAT ~~ Str ?? $input !! $input.readchars.chomp);
 
   # Store all chars in List
-  my $input_list = ($strip_debug == 1 ?? $input_new.subst( /';;;' <-[\n]>+/, '', :g) !! $input_new).split("", :skip-empty).List.cache;
+  my $input_list = (given $strip_debug {
+                      when 1  { $input_new.subst( /';;;' <-[\n]>+/, '', :g) }
+                      default { $input_new }
+                    });
 
   # hash reference for "state". This module
-  my %s = input          => $input_list,
+  my %s = input          => $input_list.split("", :skip-empty).List.cache,
           strip_debug    => $strip_debug,
           last_read_char => 0,
           input_pos      => 0,
