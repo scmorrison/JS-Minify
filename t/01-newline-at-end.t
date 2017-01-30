@@ -15,7 +15,7 @@ function (s) { alert("Foo"); }
 EOS
 
 my $t1 = js-minify(input => $js_with_new_line);
-like $t1, / '\n' $/, 'Last new line was preserved';
+like $t1, / \n $/, 'Last new line was preserved';
  
 my $js_without_new_line = $js_with_new_line.chomp;
 my $t2 = js-minify(input => $js_without_new_line);
