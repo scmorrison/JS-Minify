@@ -54,16 +54,16 @@ sub get(%s is copy) returns List {
 # new d
 #
 # i.e. print a and advance
-sub action1(%s) returns Hash {
+sub print-chr-a(%s) returns Hash {
   %s<lastnws> = %s<a> unless is-whitespace(%s<a>);
   %s<last> = %s<a>;
-  action2(%s);
+  print-chr-output(%s);
 }
 
 # sneeky output %s<a> for comments
-sub action2(%s) returns Hash {
+sub print-chr-output(%s) returns Hash {
   %s<output>.send(%s<a>);
-  action3(%s);
+  delete-chr-a(%s);
 }
 
 # move b to a
@@ -72,9 +72,9 @@ sub action2(%s) returns Hash {
 # new d
 #
 # i.e. delete a
-sub action3(%s) returns Hash {
+sub delete-chr-a(%s) returns Hash {
   %s<a> = %s<b>;
-  action4(%s);
+  delete-chr-b(%s);
 }
 
 # move c to b
@@ -82,7 +82,7 @@ sub action3(%s) returns Hash {
 # new d
 #
 # i.e. delete b
-sub action4(%s is copy) returns Hash {
+sub delete-chr-b(%s is copy) returns Hash {
   %s<b> = %s<c>;
   %s<c> = %s<d>;
   (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s); 
@@ -93,13 +93,13 @@ sub action4(%s is copy) returns Hash {
 # when this sub is called, %s<a> is on the opening delimiter character
 sub put-literal(%s is copy) returns Hash {
   my $delimiter = %s<a>; # ', " or /
-  %s = action1(%s);
+  %s = print-chr-a(%s);
   repeat {
     while (%s<a> && %s<a> eq 92) { # \\ escape character only escapes only the next one character
-      %s = action1(%s);
-      %s = action1(%s);
+      %s = print-chr-a(%s);
+      %s = print-chr-a(%s);
     }
-    %s = action1(%s);
+    %s = print-chr-a(%s);
   } until (%s<last> eq $delimiter || !%s<a>);
 
   given %s<last> {
@@ -120,7 +120,7 @@ sub collapse-whitespace(%s is copy) returns Hash {
   while (%s<a> && is-whitespace(%s<a>) &&
          %s<b> && is-whitespace(%s<b>)) {
     %s<a> = "\n".ord when (is-endspace(%s<a>) || is-endspace(%s<b>));
-    %s = action4(%s); # delete b
+    %s = delete-chr-b(%s); # delete b
   }
   return %s;
 }
@@ -129,7 +129,7 @@ sub collapse-whitespace(%s is copy) returns Hash {
 # Doesn't print any of this whitespace.
 sub skip-whitespace(%s is copy) returns Hash {
   while (%s<a> && is-whitespace(%s<a>)) {
-    %s = action3(%s);
+    %s = delete-chr-a(%s);
   }
   return %s;
 }
@@ -138,7 +138,7 @@ sub skip-whitespace(%s is copy) returns Hash {
 # If any of the whitespace is a new line then print one new line.
 sub preserve-endspace(%s is copy) returns Hash {
   %s = collapse-whitespace(%s);
-  %s = action1(%s) when ( %s<a> && is-endspace(%s<a>) && %s<b> && !is-postfix(%s<b>) );
+  %s = print-chr-a(%s) when ( %s<a> && is-endspace(%s<a>) && %s<b> && !is-postfix(%s<b>) );
   skip-whitespace(%s);
 }
 
@@ -152,7 +152,7 @@ sub on-whitespace-conditional-comment(Int $a, Int $b, Int $c, Int $d) returns Bo
 # Shift char or preserve endspace toggle
 sub process-conditional-comment(%s) returns Hash {
   given on-whitespace-conditional-comment(|%s{'a' .. 'd'}) {
-    when * eq True { action1(%s) }
+    when * eq True { print-chr-a(%s) }
     default { preserve-endspace(%s) }
   }
 }
@@ -161,7 +161,7 @@ sub process-conditional-comment(%s) returns Hash {
 sub process-double-plus-minus(%s) returns Hash {
   given %s<a> {
     when is-whitespace(%s<a>) {
-      (%s<b> && %s<b> eq %s<last>) ?? action1(%s) !! preserve-endspace(%s);
+      (%s<b> && %s<b> eq %s<last>) ?? print-chr-a(%s) !! preserve-endspace(%s);
     }
     default { %s }
   }
@@ -172,7 +172,7 @@ sub process-property-invocation(%s) returns Hash {
   (given %s<a> {
      when $_ && is-whitespace($_) {
        # if %s<b> is '.' could be (12 .toString()) which is property invocation. If space removed becomes decimal point and error.
-      (%s<b> && (is-alphanum(%s<b>) || %s<b> eq 46)) ?? action1(%s) !! preserve-endspace(%s);
+      (%s<b> && (is-alphanum(%s<b>) || %s<b> eq 46)) ?? print-chr-a(%s) !! preserve-endspace(%s);
      }
      default { %s }
    });
@@ -185,14 +185,14 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 47}) returns Hash
   my $cc_flag = %s<c> && %s<c> eq 64; # @ tests in IE7 show no space allowed between slashes and at symbol
 
   repeat {
-    %s = $cc_flag ?? action2(%s) !! action3(%s);
+    %s = $cc_flag ?? print-chr-output(%s) !! delete-chr-a(%s);
   } until (!%s<a> || is-endspace(%s<a>));
 
   # Return %s
   (given $cc_flag {
      when $_ {
        (%s
-        ==> action1() # cannot use preserve-endspace(%s) here because it might not print the new line
+        ==> print-chr-a() # cannot use preserve-endspace(%s) here because it might not print the new line
         ==> skip-whitespace());
      }
      when %s<last> && !is-endspace(%s<last>) && !is-prefix(%s<last>) {
@@ -209,7 +209,7 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 42}) returns Hash
   my $cc_flag = %s<c> && %s<c> eq 64; # @ test in IE7 shows no space allowed between star and at symbol
 
   repeat { 
-    %s = $cc_flag ?? action2(%s) !! action3(%s);
+    %s = $cc_flag ?? print-chr-output(%s) !! delete-chr-a(%s);
   } until (!%s<b> || (%s<a> eq 42 && %s<b> eq 47)); # * /
 
   die 'unterminated comment, stopped' unless %s<b>; # %s<a> is asterisk and %s<b> is foreslash
@@ -218,13 +218,13 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 42}) returns Hash
   (given $cc_flag {
      when $_ {
        (%s
-        ==> action2() # the *
-        ==> action2() # the /
+        ==> print-chr-output() # the *
+        ==> print-chr-output() # the /
         # inside the conditional comment there may be a missing terminal semi-colon
         ==> preserve-endspace());
      }
      default { # the comment is being removed
-      %s = action3(%s); # the *
+      %s = delete-chr-a(%s); # the *
       %s<a> = ' '.ord;  # the /
       %s = collapse-whitespace(%s);
       if (%s<last> && %s<b> &&
@@ -233,7 +233,7 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 42}) returns Hash
         (%s<last> eq 43 && %s<b> eq 43) || (%s<last> eq 45 && %s<b> eq 45))) { # for a situation like 5-/**/-2 or a/**/a
         # When entering this block %s<a> is whitespace.
         # The comment represented whitespace that cannot be removed. Therefore replace the now gone comment with a whitespace.
-        action1(%s);
+        print-chr-a(%s);
       } elsif (%s<last> && !is-prefix(%s<last>)) {
         preserve-endspace(%s);
       } else {
@@ -246,7 +246,7 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 42}) returns Hash
 multi sub process-comments(%s is copy where {%s<lastnws> && 
                            (%s<lastnws> ~~ 41|93|46  || # \) \] \.
                             is-alphanum(%s<lastnws>))}) returns Hash {  # division
- action1(%s)
+ print-chr-a(%s)
  ==> collapse-whitespace()
  # don't want closing delimiter to
  # become a slash-slash comment with
@@ -257,7 +257,7 @@ multi sub process-comments(%s is copy where {%s<lastnws> &&
 
 multi sub process-comments(%s is copy where {%s<a> eq 47 and %s<b> eq 46 }) returns Hash { # / .
   collapse-whitespace(%s)
-  ==> action1();
+  ==> print-chr-a();
 }
 
 multi sub process-comments(%s is copy) returns Hash {
@@ -282,24 +282,24 @@ multi sub process-char(%s where { %s<a> ~~ 34|39}) returns Hash { # string liter
 }
 
 multi sub process-char(%s where { %s<a> ~~ 43|45}) returns Hash { # careful with + + and - -
-  action1(%s)
+  print-chr-a(%s)
   ==> collapse-whitespace()
   ==> process-double-plus-minus();
 }
 
 multi sub process-char(%s where {is-alphanum(%s<a>)}) returns Hash { # keyword, identifiers, numbers
-  action1(%s)
+  print-chr-a(%s)
   ==> collapse-whitespace()
   ==> process-property-invocation();
 }
 
 multi sub process-char(%s where {%s<a> ~~ 41|93|125}) returns Hash { # ] } )
-  action1(%s)
+  print-chr-a(%s)
   ==> preserve-endspace();
 }
 
 multi sub process-char(%s is copy) returns Hash {
-  action1(%s)
+  print-chr-a(%s)
   ==> skip-whitespace();
 }
 
