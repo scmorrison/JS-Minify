@@ -1,6 +1,6 @@
 use v6;
 
-unit module Minify::JS;
+unit module JS::Minify;
 
 # return true if the character is allowed in identifier.
 sub is-alphanum(Int $x) returns Bool {
@@ -27,7 +27,6 @@ sub is-prefix(Int $x) returns Bool {
 }
 
 # New line characters before these characters can removed.
-
 sub is-postfix(Int $x) returns Bool {
   $x.chr ~~ / <[ } ) \] ]> /.Bool;
 }
