@@ -4,15 +4,15 @@ unit module Minify::JS;
 
 # return true if the character is allowed in identifier.
 sub is-alphanum($x) returns Bool {
-  $x ~~ / <[ $\\ ]> /.Bool || ord($x) > 126 || $x ~~ / \w /.Bool ;
+  $x.ord > 126 || $x ~~ / <[ $ \\ \w ]> /.Bool ;
 }
 
 sub is-endspace($x) returns Bool {
-  $x ~~ / <[ \n \r \f ]> /.Bool;
+  $x ~~ / <[ \v ]> /.Bool; 
 }
 
 sub is-whitespace($x) returns Bool {
-  $x ~~ / <[ \h ]> /.Bool || is-endspace($x);
+  $x ~~ / <[ \h ] > /.Bool || is-endspace($x);
 }
 
 # New line characters before or after these characters can be removed.
@@ -277,47 +277,36 @@ multi sub process-comments(%s is copy) returns Hash {
 # process-char
 #
 
-multi sub process-char(%s where {%s<a> eq '/'}) returns Hash { # a division, comment, or regexp literal
-
+multi sub process-char(%s where {%s<a>.ord eq 47}) returns Hash { # a division (/), comment, or regexp literal
   process-comments(%s);
 
 }
 
-multi sub process-char(%s where { %s<a> ~~ / <[ ' " ]> /.Bool }) returns Hash { # string literal
-
+multi sub process-char(%s where { %s<a>.ord ~~ 34|39 }) returns Hash { # string literal (' ")
   put-literal(%s)
   ==> preserve-endspace();
-
 }
 
-multi sub process-char(%s where { %s<a> ~~ / <[ + -]> /.Bool }) returns Hash { # careful with + + and - -
-
+multi sub process-char(%s where { %s<a>.ord ~~ 43|45 }) returns Hash { # careful with + + and - -
   action1(%s)
   ==> collapse-whitespace()
   ==> process-double-plus-minus();
-
 }
 
 multi sub process-char(%s where {is-alphanum(%s<a>)}) returns Hash { # keyword, identifiers, numbers
-
   action1(%s)
   ==> collapse-whitespace()
   ==> process-property-invocation();
-
 }
 
-multi sub process-char(%s where {%s<a> ~~ / <[ \] \} \) ]> /.Bool }) returns Hash {
-
+multi sub process-char(%s where {%s<a>.ord ~~ 41|93|125 }) returns Hash { # ] } )
   action1(%s)
   ==> preserve-endspace();
-
 }
 
 multi sub process-char(%s is copy) returns Hash {
-
   action1(%s)
   ==> skip-whitespace();
-
 }
 
 # Decouple the output processing.
@@ -352,9 +341,7 @@ sub output-manager($output, $stream) returns Promise {
     # Return fully minified result when
     # not streaming to client
     $output_text unless $stream ~~ Channel;
-
   });
-
 }
 
 #
@@ -428,5 +415,4 @@ sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) i
 
   # return output
   $output.result unless $stream ~~ Channel;
-
 }
