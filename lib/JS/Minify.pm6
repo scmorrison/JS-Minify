@@ -354,16 +354,16 @@ sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) i
   # as others. Easier refactoring.
 
   # Capture inpute / readchars from file into string
-  my $input_new = ($input.WHAT ~~ Str ?? $input !! $input.readchars.chomp);
+  my Str $input_new = ($input.WHAT ~~ Str ?? $input !! $input.readchars.chomp);
 
   # Store all chars in List
-  my $input_list = (given $strip_debug {
+  my Int @input_list = (given $strip_debug {
                       when 1  { $input_new.subst( /';;;' <-[\n]>+/, '', :g) }
                       default { $input_new }
-                    });
+                    }).ords.cache;
 
   # hash reference for "state". This module
-  my %s = (input          => $input_list.ords.cache,
+  my %s = (input          => @input_list,
            strip_debug    => $strip_debug,
            last_read_char => 0,
            input_pos      => 0,
@@ -374,7 +374,7 @@ sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) i
   # Capture output either to client supplied stream (Channel)
   # or to $output as string to return upon completion.
 
-  my $output = (given $stream {
+  my Promise $output = (given $stream {
                   when Channel { output-manager(%s<output>, $stream) }
                   default      { output-manager(%s<output>) }
                 });
@@ -410,7 +410,7 @@ sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) i
 
 
     # Return \n if input included it
-    %s<output>.send(10) when %s<input>.tail.chr eq "\n";
+    %s<output>.send(10) when %s<input>.tail eq 10; # /n 
 
     # Send 'done' to exit react/whenever block
     %s<output>.send('exit');
