@@ -3,43 +3,44 @@ use v6;
 unit module JS::Minify;
 
 # return true if the character is allowed in identifier.
-sub is-alphanum(Int $x) returns Bool {
-  $x > 126 || $x.chr ~~ / <[ \$ \\ \w ]> /.Bool ;
+sub is-alphanum(Str $x) returns Bool {
+  $x ~~ / <[ $ \\ \w ]> /.Bool || ord($x) > 126;
 }
 
-sub is-endspace(Int $x) returns Bool {
-  $x.chr ~~ / \v /.Bool;
+sub is-endspace(Str $x) returns Bool {
+  $x ~~ / <[ \n \r \f ]> /.Bool;
 }
 
-sub is-whitespace(Int $x) returns Bool {
-  $x.chr ~~ / \h /.Bool || is-endspace($x);
+sub is-whitespace(Str $x) returns Bool {
+  $x ~~ / <[ \h ]> /.Bool || is-endspace($x);
 }
 
 # New line characters before or after these characters can be removed.
 # Not + - / in this list because they require special care.
-sub is-infix(Int $x) returns Bool {
-  $x.chr ~~ / <[ , ; : = & % * < > ? | \n ]> /.Bool
+sub is-infix(Str $x) returns Bool {
+  $x ~~ / <[ , ; : = & % * < > ? | \n ]> /.Bool;
 }
 
 # New line characters after these characters can be removed.
-sub is-prefix(Int $x) returns Bool {
-  $x.chr ~~ / <[ { ( [ ! ]> /.Bool || is-infix($x);
+sub is-prefix(Str $x) returns Bool {
+  $x ~~ / <[ { ( [ ! ]> /.Bool || is-infix($x);
 }
 
 # New line characters before these characters can removed.
-sub is-postfix(Int $x) returns Bool {
-  $x.chr ~~ / <[ } ) \] ]> /.Bool;
+
+sub is-postfix(Str $x) returns Bool {
+  $x ~~ / <[ } ) \] ]> /.Bool;
 }
 
-sub get(%s is copy) returns List { 
+sub get(%s) returns List { 
   given %s<input>.elems {
     when *>0 {
       unless %s<input_pos> <= %s<input>.elems {
-        [0, %s<last_read_char>, %s<input_pos>];
+        ["", %s<last_read_char>, %s<input_pos>];
       }
-      my $char = %s<input>[%s<input_pos>];
-      my $last_read_char = %s<input>[%s<input_pos>++];
-      $char ?? $char !! 0, $last_read_char, %s<input_pos>;
+      my Str $char = %s<input>[%s<input_pos>];
+      my Str $last_read_char = %s<input>[%s<input_pos>++];
+      $char ?? $char !! "", $last_read_char, %s<input_pos>;
     }
     default {
       die "no input";
@@ -54,14 +55,14 @@ sub get(%s is copy) returns List {
 # new d
 #
 # i.e. print a and advance
-sub print-chr-a(%s) returns Hash {
+sub step-chr-a(%s) returns Hash {
   %s<lastnws> = %s<a> unless is-whitespace(%s<a>);
-  %s<last> = %s<a>;
-  print-chr-output(%s);
+  %s<last>    = %s<a>;
+  send-chr-out(%s);
 }
 
 # sneeky output %s<a> for comments
-sub print-chr-output(%s) returns Hash {
+sub send-chr-out(%s) returns Hash {
   %s<output>.send(%s<a>);
   delete-chr-a(%s);
 }
@@ -83,8 +84,7 @@ sub delete-chr-a(%s) returns Hash {
 #
 # i.e. delete b
 sub delete-chr-b(%s is copy) returns Hash {
-  %s<b> = %s<c>;
-  %s<c> = %s<d>;
+  (%s<b>, %s<c>) = (%s<c>, %s<d>);
   (%s<d>, %s<last_read_char>, %s<input_pos>) = get(%s); 
   return %s;
 }
@@ -92,20 +92,21 @@ sub delete-chr-b(%s is copy) returns Hash {
 # put string and regexp literals
 # when this sub is called, %s<a> is on the opening delimiter character
 sub put-literal(%s is copy) returns Hash {
-  my $delimiter = %s<a>; # ', " or /
-  %s = print-chr-a(%s);
+  my Str $delimiter = %s<a>; # ', " or /
+  %s = step-chr-a(%s);
   repeat {
-    while (%s<a> && %s<a> eq 92) { # \\ escape character only escapes only the next one character
-      %s = print-chr-a(%s);
-      %s = print-chr-a(%s);
+    while (%s<a> eq '\\') { # escape character only escapes only the next one character
+      %s = (%s
+            ==> step-chr-a()
+            ==> step-chr-a());
     }
-    %s = print-chr-a(%s);
+    %s = step-chr-a(%s);
   } until (%s<last> eq $delimiter || !%s<a>);
 
   given %s<last> {
-    when * ne $delimiter { # ran off end of file before printing the closing delimiter
-      die 'unterminated single quoted string literal, stopped' if $delimiter eq 39; # \'
-      die 'unterminated double quoted string literal, stopped' if $delimiter eq 34; # \"
+    when !$delimiter { # ran off end of file before printing the closing delimiter
+      die 'unterminated single quoted string literal, stopped' if $delimiter eq '\'';
+      die 'unterminated double quoted string literal, stopped' if $delimiter eq '"';
       die 'unterminated regular expression literal, stopped';
     }
     default { %s }
@@ -117,9 +118,9 @@ sub put-literal(%s is copy) returns Hash {
 # If any of the whitespace is a new line then ensure %s<a> is a new line
 # when this function ends.
 sub collapse-whitespace(%s is copy) returns Hash {
-  while (%s<a> && is-whitespace(%s<a>) &&
-         %s<b> && is-whitespace(%s<b>)) {
-    %s<a> = "\n".ord when (is-endspace(%s<a>) || is-endspace(%s<b>));
+  while (is-whitespace(%s<a>) &&
+         is-whitespace(%s<b>)) {
+    %s<a> = "\n" when (is-endspace(%s<a>) || is-endspace(%s<b>));
     %s = delete-chr-b(%s); # delete b
   }
   return %s;
@@ -128,7 +129,7 @@ sub collapse-whitespace(%s is copy) returns Hash {
 # Advance %s<a> to non-whitespace or end of file.
 # Doesn't print any of this whitespace.
 sub skip-whitespace(%s is copy) returns Hash {
-  while (%s<a> && is-whitespace(%s<a>)) {
+  while (is-whitespace(%s<a>)) {
     %s = delete-chr-a(%s);
   }
   return %s;
@@ -137,22 +138,23 @@ sub skip-whitespace(%s is copy) returns Hash {
 # Advance %s<a> to non-whitespace or end of file
 # If any of the whitespace is a new line then print one new line.
 sub preserve-endspace(%s is copy) returns Hash {
-  %s = collapse-whitespace(%s);
-  %s = print-chr-a(%s) when ( %s<a> && is-endspace(%s<a>) && %s<b> && !is-postfix(%s<b>) );
-  skip-whitespace(%s);
+  %s = (%s
+        ==> collapse-whitespace()
+        ==> { is-endspace($_<a>) && !is-postfix($_<b>) ?? step-chr-a($_) !! $_ }()
+        ==> skip-whitespace());
 }
 
-sub on-whitespace-conditional-comment(Int $a, Int $b, Int $c, Int $d) returns Bool {
-  ($a && is-whitespace($a) &&
-   $b && $b eq 47 && # /
-   $c && ($c ~~ 42|47) && # \/ *
-   $d && $d eq 64).Bool; # @
+sub on-whitespace-conditional-comment(Str $a, Str $b, Str $c, Str $d) returns Bool {
+  (is-whitespace($a) &&
+   $b eq '/' &&
+   ($c ~~ / <[ \/ * ]> /.Bool) &&
+   $d eq '@').Bool;
 }
 
 # Shift char or preserve endspace toggle
 sub process-conditional-comment(%s) returns Hash {
   given on-whitespace-conditional-comment(|%s{'a' .. 'd'}) {
-    when * eq True { print-chr-a(%s) }
+    when * eq True { step-chr-a(%s) }
     default { preserve-endspace(%s) }
   }
 }
@@ -161,7 +163,7 @@ sub process-conditional-comment(%s) returns Hash {
 sub process-double-plus-minus(%s) returns Hash {
   given %s<a> {
     when is-whitespace(%s<a>) {
-      (%s<b> && %s<b> eq %s<last>) ?? print-chr-a(%s) !! preserve-endspace(%s);
+      (%s<b> eq %s<last>) ?? step-chr-a(%s) !! preserve-endspace(%s);
     }
     default { %s }
   }
@@ -172,7 +174,7 @@ sub process-property-invocation(%s) returns Hash {
   (given %s<a> {
      when $_ && is-whitespace($_) {
        # if %s<b> is '.' could be (12 .toString()) which is property invocation. If space removed becomes decimal point and error.
-      (%s<b> && (is-alphanum(%s<b>) || %s<b> eq 46)) ?? print-chr-a(%s) !! preserve-endspace(%s);
+      (%s<b> && (is-alphanum(%s<b>) || %s<b> eq '.')) ?? step-chr-a(%s) !! preserve-endspace(%s);
      }
      default { %s }
    });
@@ -181,18 +183,18 @@ sub process-property-invocation(%s) returns Hash {
 #
 # process-comments
 #
-multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 47}) returns Hash { # / a division, comment, or regexp literal
-  my $cc_flag = %s<c> && %s<c> eq 64; # @ tests in IE7 show no space allowed between slashes and at symbol
+multi sub process-comments(%s is copy where {%s<b> eq '/'}) returns Hash { # a division, comment, or regexp literal
+  my Bool $cc_flag = %s<c> eq '@'; # tests in IE7 show no space allowed between slashes and at symbol
 
   repeat {
-    %s = $cc_flag ?? print-chr-output(%s) !! delete-chr-a(%s);
+    %s = $cc_flag ?? send-chr-out(%s) !! delete-chr-a(%s);
   } until (!%s<a> || is-endspace(%s<a>));
 
   # Return %s
   (given $cc_flag {
      when $_ {
        (%s
-        ==> print-chr-a() # cannot use preserve-endspace(%s) here because it might not print the new line
+        ==> step-chr-a() # cannot use preserve-endspace(%s) here because it might not print the new line
         ==> skip-whitespace());
      }
      when %s<last> && !is-endspace(%s<last>) && !is-prefix(%s<last>) {
@@ -205,12 +207,12 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 47}) returns Hash
 
 }
 
-multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 42}) returns Hash { # slash-star comment
-  my $cc_flag = %s<c> && %s<c> eq 64; # @ test in IE7 shows no space allowed between star and at symbol
+multi sub process-comments(%s is copy where {%s<b> eq '*'}) returns Hash { # slash-star comment
+  my Bool $cc_flag = %s<c> eq '@'; # test in IE7 shows no space allowed between star and at symbol
 
   repeat { 
-    %s = $cc_flag ?? print-chr-output(%s) !! delete-chr-a(%s);
-  } until (!%s<b> || (%s<a> eq 42 && %s<b> eq 47)); # * /
+    %s = $cc_flag ?? send-chr-out(%s) !! delete-chr-a(%s);
+  } until (!%s<b> || (%s<a> eq '*' && %s<b> eq '/'));
 
   die 'unterminated comment, stopped' unless %s<b>; # %s<a> is asterisk and %s<b> is foreslash
 
@@ -218,22 +220,21 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 42}) returns Hash
   (given $cc_flag {
      when $_ {
        (%s
-        ==> print-chr-output() # the *
-        ==> print-chr-output() # the /
+        ==> send-chr-out() # the *
+        ==> send-chr-out() # the /
         # inside the conditional comment there may be a missing terminal semi-colon
         ==> preserve-endspace());
      }
      default { # the comment is being removed
       %s = delete-chr-a(%s); # the *
-      %s<a> = ' '.ord;  # the /
+      %s<a> = ' ';  # the /
       %s = collapse-whitespace(%s);
       if (%s<last> && %s<b> &&
-        ((is-alphanum(%s<last>) && (is-alphanum(%s<b>)||%s<b> eq 46)) || # . period
-        #            +              +                   -              -
-        (%s<last> eq 43 && %s<b> eq 43) || (%s<last> eq 45 && %s<b> eq 45))) { # for a situation like 5-/**/-2 or a/**/a
+        ((is-alphanum(%s<last>) && ( is-alphanum(%s<b>) || %s<b> eq '.') ) ||
+        (%s<last> eq '+' && %s<b> eq '+') || (%s<last> eq '-' && %s<b> eq '-'))) { # for a situation like 5-/**/-2 or a/**/a
         # When entering this block %s<a> is whitespace.
         # The comment represented whitespace that cannot be removed. Therefore replace the now gone comment with a whitespace.
-        print-chr-a(%s);
+        step-chr-a(%s);
       } elsif (%s<last> && !is-prefix(%s<last>)) {
         preserve-endspace(%s);
       } else {
@@ -244,24 +245,28 @@ multi sub process-comments(%s is copy where {%s<b> && %s<b> eq 42}) returns Hash
 }
 
 multi sub process-comments(%s is copy where {%s<lastnws> && 
-                           (%s<lastnws> ~~ 41|93|46  || # \) \] \.
-                            is-alphanum(%s<lastnws>))}) returns Hash {  # division
- print-chr-a(%s)
- ==> collapse-whitespace()
- # don't want closing delimiter to
- # become a slash-slash comment with
- # following conditional comment
- ==> process-conditional-comment();
+                           (%s<lastnws> ~~ / <[ \) \] \. ]> /.Bool ||
+                           is-alphanum(%s<lastnws>))}) returns Hash {  # division
+  %s
+  ==> step-chr-a()
+  ==> collapse-whitespace()
+  # don't want closing delimiter to
+  # become a slash-slash comment with
+  # following conditional comment
+  ==> process-conditional-comment();
 }
 
 
-multi sub process-comments(%s is copy where {%s<a> eq 47 and %s<b> eq 46 }) returns Hash { # / .
-  collapse-whitespace(%s)
-  ==> print-chr-a();
+multi sub process-comments(%s is copy where {%s<a> eq '/' and %s<b> eq '.' }) returns Hash {
+  %s
+  ==> collapse-whitespace()
+  ==> step-chr-a();
 }
 
 multi sub process-comments(%s is copy) returns Hash {
-  put-literal(%s)
+
+  %s
+  ==>put-literal()
   ==> collapse-whitespace()
   # we don't want closing delimiter to
   # become a slash-slash comment with
@@ -272,34 +277,40 @@ multi sub process-comments(%s is copy) returns Hash {
 #
 # process-char
 #
-multi sub process-char(%s where {%s<a> eq 47}) returns Hash { # a division (/), comment, or regexp literal
+multi sub process-char(%s where {%s<a> eq '/'}) returns Hash { # a division, comment, or regexp literal
   process-comments(%s);
 }
 
-multi sub process-char(%s where { %s<a> ~~ 34|39}) returns Hash { # string literal (' ")
-  put-literal(%s)
+multi sub process-char(%s where { %s<a> ~~ / <[ ' " ]> /.Bool }) returns Hash { # string literal
+  %s
+  ==> put-literal()
   ==> preserve-endspace();
+
 }
 
-multi sub process-char(%s where { %s<a> ~~ 43|45}) returns Hash { # careful with + + and - -
-  print-chr-a(%s)
+multi sub process-char(%s where { %s<a> ~~ / <[ + -]> /.Bool }) returns Hash { # careful with + + and - -
+  %s
+  ==> step-chr-a()
   ==> collapse-whitespace()
   ==> process-double-plus-minus();
 }
 
 multi sub process-char(%s where {is-alphanum(%s<a>)}) returns Hash { # keyword, identifiers, numbers
-  print-chr-a(%s)
+  %s
+  ==> step-chr-a()
   ==> collapse-whitespace()
   ==> process-property-invocation();
 }
 
-multi sub process-char(%s where {%s<a> ~~ 41|93|125}) returns Hash { # ] } )
-  print-chr-a(%s)
+multi sub process-char(%s where {%s<a> ~~ / <[ \] \} \) ]> /.Bool }) returns Hash {
+  %s
+  ==> step-chr-a()
   ==> preserve-endspace();
 }
 
 multi sub process-char(%s is copy) returns Hash {
-  print-chr-a(%s)
+  %s
+  ==> step-chr-a()
   ==> skip-whitespace();
 }
 
@@ -320,7 +331,7 @@ multi sub output-manager(Channel $output, Channel $stream) returns Promise {
         last;
       }
       # Stream to client channel
-      $stream.send($c.chr);
+      $stream.send($c);
     }
     return;
   }
@@ -330,13 +341,13 @@ multi sub output-manager(Channel $output, Channel $stream) returns Promise {
 #
 multi sub output-manager(Channel $output) returns Promise {
   start {
-    my $output_text;
+    my Str $output_text;
     # Read from client supplied channel
     $output.list.map: -> $c {
       # Exit when 'exit'
       last if $c eq 'exit';
       # Store to output
-      $output_text ~= $c.chr;
+      $output_text ~= $c;
     }
 
     # Return fully minified result when
@@ -348,7 +359,7 @@ multi sub output-manager(Channel $output) returns Promise {
 #
 # js-minify
 #
-sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) is export {
+sub js-minify(:$input!, Str :$copyright = '', Slip :$stream, Int :$strip_debug = 0) is export {
 
   # Immediately turn hash into a hash reference so that notation is the same in this function
   # as others. Easier refactoring.
@@ -357,31 +368,30 @@ sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) i
   my Str $input_new = ($input.WHAT ~~ Str ?? $input !! $input.readchars.chomp);
 
   # Store all chars in List
-  my Int @input_list = (given $strip_debug {
-                      when 1  { $input_new.subst( /';;;' <-[\n]>+/, '', :g) }
-                      default { $input_new }
-                    }).ords.cache;
+  my Str @input_list = (given $strip_debug {
+                        when 1  { $input_new.subst( /';;;' <-[\n]>+/, '', :g) }
+                        default { $input_new }
+                        }).split("", :skip-empty).cache;
 
-  # hash reference for "state". This module
-  my %s = (input          => @input_list,
-           strip_debug    => $strip_debug,
-           last_read_char => 0,
-           input_pos      => 0,
-           output         => Channel.new,
-           last           => Empty, # assign for safety
-           lastnws        => Empty).Hash; # assign for safety
+  # hash reference for "state"
+  my %s = input          => @input_list,
+          strip_debug    => $strip_debug,
+          last_read_char => 0,
+          input_pos      => 0,
+          output         => Channel.new,
+          last           => Str, # assign for safety
+          lastnws        => Str; # assign for safety
 
   # Capture output either to client supplied stream (Channel)
   # or to $output as string to return upon completion.
-
   my Promise $output = (given $stream {
-                  when Channel { output-manager(%s<output>, $stream) }
-                  default      { output-manager(%s<output>) }
-                });
+                          when Channel { output-manager(%s<output>, $stream) }
+                          default      { output-manager(%s<output>) }
+                        });
 
   # Print the copyright notice first
   if ($copyright) {
-    "/* $copyright */".ords».&{%s<output>.send($_)};
+    %s<output>.send("/* $copyright */");
   }
 
   # Initialize the buffer (first four characters to analyze)
@@ -410,12 +420,15 @@ sub js-minify(:$input!, :$copyright = '', :$stream = Empty, :$strip_debug = 0) i
 
 
     # Return \n if input included it
-    %s<output>.send(10) when %s<input>.tail eq 10; # /n 
+    %s<output>.send('\n') when %s<input>.tail eq "\n";
 
     # Send 'done' to exit react/whenever block
     %s<output>.send('exit');
+
   }
 
   # return output
   $output.result unless $stream ~~ Channel;
+
 }
+
