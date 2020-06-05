@@ -7,9 +7,9 @@ use JS::Minify;
 plan 20;
 
 sub min-test($filename) {
-  my $infile = open("t/scripts/$filename.js", :r) or die("couldn't open file");
+  my $infile = open("t/scripts/$filename.js") or die("couldn't open file");
   my $minified = js-minify(input => $infile);
-  my $expected_output = slurp("t/scripts/{$filename}-expected.js", :r) or die("couldn't open file");
+  my $expected_output = slurp("t/scripts/{$filename}-expected.js") or die("couldn't open file");
   is $minified, $expected_output, "testing $filename";
 }
 
